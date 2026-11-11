@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initLucideIcons();
   setupEventListeners();
   renderApp();
+  if (typeof syncEngine !== 'undefined') {
+    syncEngine.init();
+  }
 });
 
 function loadDataFromStorage() {
@@ -129,18 +132,30 @@ function loadDataFromStorage() {
 
 function saveCartToStorage() {
   localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
+  if (typeof syncEngine !== 'undefined') {
+    syncEngine.broadcastState('Perubahan Keranjang');
+  }
 }
 
 function saveBudgetToStorage() {
   localStorage.setItem(STORAGE_KEYS.BUDGET, state.budgetCap.toString());
+  if (typeof syncEngine !== 'undefined') {
+    syncEngine.broadcastState('Batas Anggaran');
+  }
 }
 
 function saveHistoryToStorage() {
   localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(state.history));
+  if (typeof syncEngine !== 'undefined') {
+    syncEngine.broadcastState('Riwayat Belanja');
+  }
 }
 
 function savePricesToStorage() {
   localStorage.setItem(STORAGE_KEYS.PRICES, JSON.stringify(state.priceDatabase));
+  if (typeof syncEngine !== 'undefined') {
+    syncEngine.broadcastState('Database Harga Acuan');
+  }
 }
 
 function initPWA() {
@@ -557,7 +572,10 @@ function renderBudgetView() {
           <div class="budget-input-row">
             <span class="currency-prefix">Rp</span>
             <input type="number" id="inputBudgetValue" class="budget-large-input" value="${budget}" step="10000" min="0">
-            <button class="budget-save-btn" id="btnSaveBudgetSetting">Simpan</button>
+            <button class="budget-save-btn" id="btnSaveBudgetSetting">
+              <i data-lucide="check" style="width:14px; height:14px;"></i>
+              <span>Simpan</span>
+            </button>
           </div>
         </div>
 
@@ -617,12 +635,18 @@ function renderBudgetView() {
   `;
 
   document.getElementById('btnSaveBudgetSetting')?.addEventListener('click', () => {
+    const btn = document.getElementById('btnSaveBudgetSetting');
     const val = parseFloat(document.getElementById('inputBudgetValue').value);
     if (!isNaN(val) && val >= 0) {
       state.budgetCap = val;
       saveBudgetToStorage();
-      showToast('Batas anggaran berhasil diperbarui!', 'success');
-      renderApp();
+      if (btn) {
+        btn.innerHTML = '<span>✓ Tersimpan!</span>';
+        setTimeout(() => { renderApp(); }, 500);
+      } else {
+        renderApp();
+      }
+      showToast(`Batas anggaran berhasil diperbarui ke ${formatRupiah(val)}!`, 'success');
     }
   });
 }
@@ -1363,3 +1387,388 @@ function exportHistoryData() {
   dlAnchorElem.click();
   showToast('Data berhasil diekspor!', 'success');
 }
+
+/* ==========================================================================
+   REALTIME MULTI-DEVICE SYNC ENGINE (PC <-> HP)
+   Ultra-fast Realtime synchronization for live presentations:
+   1. Local Server SSE (Server-Sent Events) via node server.js
+   2. Cloud MQTT WebSocket Relay fallback for GitHub Pages or Remote Networks
+   ========================================================================== */
+const syncEngine = {
+  clientId: 'client_' + (window.innerWidth < 768 ? 'hp_' : 'pc_') + Math.random().toString(36).substring(2, 9),
+  deviceType: window.innerWidth < 768 ? 'Smartphone (HP)' : 'Komputer (PC)',
+  isReceivingRemoteSync: false,
+  status: 'connecting', // 'connected' | 'offline' | 'connecting'
+  mode: 'local', // 'local' | 'cloud'
+  eventSource: null,
+  mqttClient: null,
+  networkInfo: null,
+  cloudRoom: 'smart-groceries-devin-demo',
+  isInitialized: false,
+
+  init() {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+
+    this.updateStatusBadge();
+    this.initEventListeners();
+    this.detectAndConnect();
+  },
+
+  async detectAndConnect() {
+    // 1. Check if local Node.js server is active
+    try {
+      const res = await fetch('/api/network-info', { cache: 'no-store' });
+      if (res.ok) {
+        this.networkInfo = await res.json();
+        this.mode = 'local';
+        this.connectLocalSSE();
+        return;
+      }
+    } catch (e) {
+      // Local server not available, fall back to cloud sync
+    }
+
+    // 2. Fall back to Cloud MQTT Relay
+    this.connectCloudMQTT();
+  },
+
+  connectLocalSSE() {
+    try {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+
+      this.eventSource = new EventSource('/api/events');
+
+      this.eventSource.onopen = () => {
+        this.status = 'connected';
+        this.updateStatusBadge();
+        console.log('⚡ Realtime Sync SSE terhubung ke server lokal');
+      };
+
+      this.eventSource.addEventListener('init', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && data.state && Array.isArray(data.state.cart) && data.state.cart.length > 0) {
+            this.applyRemoteState(data.state, 'Sinkronisasi Server', '');
+          } else {
+            // Seed server with current client state if server is fresh
+            this.broadcastState('Initial Seed');
+          }
+        } catch (err) {
+          console.warn('Gagal memproses data init:', err);
+        }
+      });
+
+      this.eventSource.addEventListener('sync_update', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && data.senderId !== this.clientId) {
+            this.applyRemoteState(data.state, data.senderDevice, data.action);
+          }
+        } catch (err) {
+          console.warn('Gagal memproses sync_update:', err);
+        }
+      });
+
+      this.eventSource.addEventListener('ping_signal', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          this.handlePingReceived(data);
+        } catch (err) {}
+      });
+
+      this.eventSource.onerror = () => {
+        this.status = 'offline';
+        this.updateStatusBadge();
+        // Reconnect attempt
+        setTimeout(() => {
+          if (this.mode === 'local') this.connectLocalSSE();
+        }, 3000);
+      };
+    } catch (err) {
+      console.warn('Gagal membuat koneksi EventSource:', err);
+      this.connectCloudMQTT();
+    }
+  },
+
+  connectCloudMQTT() {
+    this.mode = 'cloud';
+    if (typeof mqtt === 'undefined') {
+      this.status = 'offline';
+      this.updateStatusBadge();
+      return;
+    }
+
+    try {
+      this.status = 'connecting';
+      this.updateStatusBadge();
+
+      const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+      this.mqttClient = mqtt.connect(brokerUrl, {
+        clientId: this.clientId,
+        clean: true,
+        connectTimeout: 5000,
+        reconnectPeriod: 3000
+      });
+
+      const topicSync = `smart-groceries/${this.cloudRoom}/sync`;
+      const topicPing = `smart-groceries/${this.cloudRoom}/ping`;
+
+      this.mqttClient.on('connect', () => {
+        this.status = 'connected';
+        this.updateStatusBadge();
+        console.log('⚡ Cloud Realtime Sync terhubung via MQTT Topic:', topicSync);
+        this.mqttClient.subscribe([topicSync, topicPing]);
+      });
+
+      this.mqttClient.on('message', (topic, message) => {
+        try {
+          const payload = JSON.parse(message.toString());
+          if (payload.senderId === this.clientId) return;
+
+          if (topic.endsWith('/sync')) {
+            this.applyRemoteState(payload.state, payload.senderDevice, payload.action);
+          } else if (topic.endsWith('/ping')) {
+            this.handlePingReceived(payload);
+          }
+        } catch (err) {
+          console.warn('Gagal memproses MQTT message:', err);
+        }
+      });
+
+      this.mqttClient.on('error', () => {
+        this.status = 'offline';
+        this.updateStatusBadge();
+      });
+
+      this.mqttClient.on('close', () => {
+        this.status = 'offline';
+        this.updateStatusBadge();
+      });
+    } catch (e) {
+      console.warn('MQTT connection failed:', e);
+      this.status = 'offline';
+      this.updateStatusBadge();
+    }
+  },
+
+  applyRemoteState(remoteState, senderDevice, action) {
+    if (!remoteState) return;
+    this.isReceivingRemoteSync = true;
+    try {
+      if (Array.isArray(remoteState.cart)) {
+        state.cart = remoteState.cart;
+        localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
+      }
+      if (typeof remoteState.budgetCap === 'number') {
+        state.budgetCap = remoteState.budgetCap;
+        localStorage.setItem(STORAGE_KEYS.BUDGET, state.budgetCap.toString());
+      }
+      if (Array.isArray(remoteState.history)) {
+        state.history = remoteState.history;
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(state.history));
+      }
+      if (remoteState.priceDatabase) {
+        state.priceDatabase = { ...state.priceDatabase, ...remoteState.priceDatabase };
+        localStorage.setItem(STORAGE_KEYS.PRICES, JSON.stringify(state.priceDatabase));
+      }
+
+      renderApp();
+
+      if (action && action !== 'Initial Seed') {
+        showToast(`⚡ Realtime: ${action} (${senderDevice || 'HP'})`, 'success');
+      }
+    } finally {
+      setTimeout(() => {
+        this.isReceivingRemoteSync = false;
+      }, 80);
+    }
+  },
+
+  broadcastState(actionName = 'update') {
+    if (this.isReceivingRemoteSync) return;
+
+    const payload = {
+      state: {
+        cart: state.cart,
+        budgetCap: state.budgetCap,
+        history: state.history,
+        priceDatabase: state.priceDatabase
+      },
+      senderId: this.clientId,
+      senderDevice: this.deviceType,
+      action: actionName,
+      timestamp: Date.now()
+    };
+
+    // 1. Broadcast via Local Server API
+    if (this.mode === 'local') {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => {
+        console.warn('Gagal kirim sync lokal:', err);
+      });
+    }
+
+    // 2. Broadcast via Cloud MQTT
+    if (this.mqttClient && this.mqttClient.connected) {
+      const topicSync = `smart-groceries/${this.cloudRoom}/sync`;
+      this.mqttClient.publish(topicSync, JSON.stringify(payload), { qos: 0 });
+    }
+  },
+
+  sendPing() {
+    const payload = {
+      senderId: this.clientId,
+      senderDevice: this.deviceType,
+      message: `Sinyal Tes dari ${this.deviceType}!`,
+      timestamp: Date.now()
+    };
+
+    if (this.mode === 'local') {
+      fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    }
+
+    if (this.mqttClient && this.mqttClient.connected) {
+      const topicPing = `smart-groceries/${this.cloudRoom}/ping`;
+      this.mqttClient.publish(topicPing, JSON.stringify(payload));
+    }
+
+    showToast(`🔔 Sinyal tes terkirim dari ${this.deviceType}!`, 'success');
+  },
+
+  handlePingReceived(data) {
+    showToast(`🔔 ${data.message || 'Sinyal tes realtime diterima!'}`, 'warning');
+    if ('vibrate' in navigator) {
+      try { navigator.vibrate([150, 80, 150]); } catch (e) {}
+    }
+    // Audio notification
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      }
+    } catch (e) {}
+  },
+
+  updateStatusBadge() {
+    const dot = document.getElementById('syncStatusDot');
+    const label = document.getElementById('syncStatusLabel');
+    const modalDot = document.getElementById('syncModalDot');
+    const modalText = document.getElementById('syncModalModeText');
+    const modalTitle = document.getElementById('syncModalStatusTitle');
+    const modalDesc = document.getElementById('syncModalStatusDesc');
+
+    if (!dot) return;
+
+    if (this.status === 'connected') {
+      dot.className = 'sync-pulse-dot live';
+      if (label) label.textContent = 'Sync ON';
+      if (modalDot) modalDot.className = 'sync-pulse-dot live';
+      if (modalTitle) modalTitle.textContent = '⚡ Sinkronisasi Realtime Terhubung!';
+      if (modalDesc) modalDesc.textContent = `Perangkat Anda (${this.deviceType}) aktif dan terhubung realtime.`;
+      if (modalText) {
+        modalText.textContent = this.mode === 'local' 
+          ? 'Server Lokal Wi-Fi (Instant SSE)' 
+          : 'Cloud Realtime Relay (Room: ' + this.cloudRoom + ')';
+      }
+    } else if (this.status === 'connecting') {
+      dot.className = 'sync-pulse-dot connecting';
+      if (label) label.textContent = 'Connecting...';
+      if (modalDot) modalDot.className = 'sync-pulse-dot connecting';
+      if (modalTitle) modalTitle.textContent = 'Menghubungkan ke Server...';
+      if (modalDesc) modalDesc.textContent = 'Mencari koneksi realtime PC & HP...';
+    } else {
+      dot.className = 'sync-pulse-dot offline';
+      if (label) label.textContent = 'Offline';
+      if (modalDot) modalDot.className = 'sync-pulse-dot offline';
+      if (modalTitle) modalTitle.textContent = '⚠️ Menunggu Server Sync';
+      if (modalDesc) modalDesc.textContent = 'Jalankan "node server.js" di PC agar HP dapat tersinkronisasi.';
+    }
+  },
+
+  openModal() {
+    this.updateModalInfo();
+    openModal('syncModal');
+  },
+
+  async updateModalInfo() {
+    this.updateStatusBadge();
+    const urlText = document.getElementById('syncModalUrlText');
+    const qrImg = document.getElementById('syncQrImage');
+    const qrPlaceholder = document.getElementById('syncQrPlaceholder');
+
+    let targetUrl = window.location.href;
+
+    // If on localhost or missing network info, try refreshing network info
+    if (this.mode === 'local' && (!this.networkInfo || !this.networkInfo.mobileUrl)) {
+      try {
+        const res = await fetch('/api/network-info', { cache: 'no-store' });
+        if (res.ok) {
+          this.networkInfo = await res.json();
+        }
+      } catch (e) {}
+    }
+
+    if (this.networkInfo && this.networkInfo.mobileUrl) {
+      targetUrl = this.networkInfo.mobileUrl;
+    }
+
+    if (urlText) urlText.textContent = targetUrl;
+
+    if (qrImg) {
+      const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(targetUrl)}&margin=4`;
+      qrImg.src = qrApi;
+      qrImg.onload = () => {
+        qrImg.style.display = 'block';
+        if (qrPlaceholder) qrPlaceholder.style.display = 'none';
+      };
+      qrImg.onerror = () => {
+        if (qrPlaceholder) {
+          qrPlaceholder.style.display = 'block';
+          qrPlaceholder.innerHTML = `<span style="color:#ef4444; font-weight:700;">Buka link berikut di browser HP:</span><br><code style="color:#10b981; font-size:0.95rem;">${targetUrl}</code>`;
+        }
+      };
+    }
+  },
+
+  initEventListeners() {
+    document.getElementById('btnSyncModal')?.addEventListener('click', () => {
+      this.openModal();
+    });
+
+    document.getElementById('btnCopySyncUrl')?.addEventListener('click', () => {
+      const urlText = document.getElementById('syncModalUrlText')?.textContent;
+      if (urlText) {
+        navigator.clipboard.writeText(urlText).then(() => {
+          showToast('Link berhasil disalin ke clipboard!', 'success');
+        }).catch(() => {
+          showToast('Silakan salin teks URL secara manual', 'warning');
+        });
+      }
+    });
+
+    document.getElementById('btnSendSyncPing')?.addEventListener('click', () => {
+      this.sendPing();
+    });
+  }
+};

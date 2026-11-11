@@ -50,6 +50,10 @@
             </div>
           </div>
           <div class="header-actions">
+            <button class="sync-btn-header" id="btnSyncModal" title="Realtime Sync PC & HP" aria-label="Status Sinkronisasi Realtime">
+              <span class="sync-pulse-dot live" id="syncStatusDot"></span>
+              <span id="syncStatusLabel">Sync HP</span>
+            </button>
             <button class="icon-btn-header" onclick="openAddItemModal()" title="Tambah Barang Cepat" aria-label="Tambah Barang">
               <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
             </button>
@@ -323,6 +327,76 @@
     </div>
   </div>
 
+  <!-- Modal 5: Realtime Sync PC & HP Modal -->
+  <div id="syncModal" class="modal-overlay">
+    <div class="bottom-sheet">
+      <div class="sheet-handle-bar"></div>
+      <div class="sheet-header">
+        <h3>⚡ Realtime Sync PC &amp; HP</h3>
+        <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
+      </div>
+      <div class="sheet-body">
+        
+        <!-- Live Status Card -->
+        <div class="sync-status-card" id="syncModalStatusCard">
+          <div class="sync-status-icon-wrap">
+            <i data-lucide="radio" style="width:24px; height:24px;"></i>
+          </div>
+          <div class="sync-status-info">
+            <h4 id="syncModalStatusTitle">Sinkronisasi Realtime Aktif</h4>
+            <p id="syncModalStatusDesc">Perubahan data di PC atau HP langsung sinkron seketika.</p>
+          </div>
+        </div>
+
+        <!-- Connection Details -->
+        <div class="form-group">
+          <label class="form-label">Mode Koneksi:</label>
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+            <span class="sync-pulse-dot live" id="syncModalDot"></span>
+            <span id="syncModalModeText">Server Lokal (SSE Instant Sync)</span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:12px;">
+          <label class="form-label">📱 Buka link ini di browser HP Anda:</label>
+          <div class="sync-url-box">
+            <span class="sync-url-text" id="syncModalUrlText">http://localhost:3000</span>
+            <button class="sync-copy-btn" id="btnCopySyncUrl">Salin Link</button>
+          </div>
+          <span style="font-size:0.72rem; color:var(--text-secondary); margin-top:4px; display:block;">
+            *Pastikan HP dan PC terhubung ke jaringan Wi-Fi / Hotspot yang sama.
+          </span>
+        </div>
+
+        <!-- QR Code Container -->
+        <div class="sync-qr-container" id="syncQrContainer">
+          <img id="syncQrImage" src="" alt="QR Code untuk dibuka di HP" style="display:none;" />
+          <div id="syncQrPlaceholder" style="font-size:0.8rem; color:#64748b; padding:20px; text-align:center;">
+            Memuat QR Code...
+          </div>
+          <div class="sync-qr-caption">📷 Scan QR code ini dengan kamera HP untuk langsung membuka aplikasi</div>
+        </div>
+
+        <!-- Presentation Demo Test Feature -->
+        <div style="margin-top:16px;">
+          <button class="sync-test-btn" id="btnSendSyncPing">
+            <i data-lucide="bell-ring" style="width:18px; height:18px;"></i>
+            <span>🔔 Kirim Sinyal Tes (Ping ke HP / PC)</span>
+          </button>
+          <span style="font-size:0.72rem; color:var(--text-muted); text-align:center; display:block; margin-top:6px;">
+            Tekan saat presentasi untuk membuktikan sinkronisasi langsung 2 arah ke audiens!
+          </span>
+        </div>
+
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:100%;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MQTT library for optional cloud sync fallback (e.g. GitHub Pages) -->
+  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <!-- Application Logic Scripts -->
   <script src="js/data.js"></script>
   <script src="js/app.js"></script>

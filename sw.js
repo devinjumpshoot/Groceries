@@ -37,7 +37,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  // Always let non-GET and /api/ requests pass straight to the network
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
