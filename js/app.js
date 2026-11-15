@@ -7,13 +7,18 @@
 const state = {
   activeTab: 'belanja', // 'belanja', 'anggaran', 'riwayat'
   budgetCap: 500000,    // Default 500k IDR for anak rantau
+  currentSession: {
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: new Date().toISOString().split('T')[0]
+  },
   cart: [],
   history: [],
   priceDatabase: {},
   selectedCategoryFilter: 'all',
   searchQuery: '',
   editingItemId: null,
-  editingDiscountItemId: null
+  editingDiscountItemId: null,
+  optionsItemId: null
 };
 
 // LocalStorage Keys
@@ -21,7 +26,8 @@ const STORAGE_KEYS = {
   CART: 'smart_grocery_cart',
   BUDGET: 'smart_grocery_budget',
   HISTORY: 'smart_grocery_history',
-  PRICES: 'smart_grocery_prices'
+  PRICES: 'smart_grocery_prices',
+  SESSION: 'smart_grocery_session'
 };
 
 /* ==========================================================================
@@ -33,9 +39,53 @@ document.addEventListener('DOMContentLoaded', () => {
   initLucideIcons();
   setupEventListeners();
   renderApp();
+  initCloudSync();
 });
 
+function initCloudSync() {
+  if (window.FirebaseSync && window.FirebaseSync.isAvailable()) {
+    window.FirebaseSync.initRealtimeListener((type, data) => {
+      if (type === 'cart' && Array.isArray(data)) {
+        state.cart = data;
+        localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(data));
+        renderApp();
+      } else if (type === 'budget' && typeof data === 'number') {
+        state.budgetCap = data;
+        localStorage.setItem(STORAGE_KEYS.BUDGET, data.toString());
+        renderApp();
+      } else if (type === 'history' && Array.isArray(data)) {
+        state.history = data;
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(data));
+        renderApp();
+      }
+    });
+
+    // Initial sync
+    window.FirebaseSync.syncCart(state.cart);
+    window.FirebaseSync.syncBudget(state.budgetCap);
+  }
+}
+
 function loadDataFromStorage() {
+  // F-01: Load Sesi Belanja Aktif (Lokasi Toko & Tanggal)
+  const savedSession = localStorage.getItem(STORAGE_KEYS.SESSION);
+  if (savedSession) {
+    try {
+      const parsed = JSON.parse(savedSession);
+      if (parsed.storeName) state.currentSession.storeName = parsed.storeName;
+      if (parsed.date) state.currentSession.date = parsed.date;
+    } catch (e) {}
+  }
+
+  // Set input tanggal & toko di UI
+  const storeInput = document.getElementById('sessionStoreInput');
+  const dateInput = document.getElementById('sessionDateInput');
+  if (storeInput) storeInput.value = state.currentSession.storeName;
+  if (dateInput) {
+    dateInput.value = state.currentSession.date;
+    updateSessionBadgeDate(state.currentSession.date);
+  }
+
   // Load Budget
   const savedBudget = localStorage.getItem(STORAGE_KEYS.BUDGET);
   if (savedBudget) {
@@ -127,20 +177,39 @@ function loadDataFromStorage() {
   }
 }
 
+function saveSessionToStorage() {
+  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(state.currentSession));
+}
+
+function updateSessionBadgeDate(dateStr) {
+  const badge = document.getElementById('sessionActiveBadge');
+  if (!badge) return;
+  const today = new Date().toISOString().split('T')[0];
+  if (dateStr === today) {
+    badge.textContent = 'Hari Ini';
+  } else {
+    badge.textContent = formatDate(dateStr);
+  }
+}
+
 function saveCartToStorage() {
   localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
+  if (window.FirebaseSync) window.FirebaseSync.syncCart(state.cart);
 }
 
 function saveBudgetToStorage() {
   localStorage.setItem(STORAGE_KEYS.BUDGET, state.budgetCap.toString());
+  if (window.FirebaseSync) window.FirebaseSync.syncBudget(state.budgetCap);
 }
 
 function saveHistoryToStorage() {
   localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(state.history));
+  if (window.FirebaseSync) window.FirebaseSync.syncHistory(state.history);
 }
 
 function savePricesToStorage() {
   localStorage.setItem(STORAGE_KEYS.PRICES, JSON.stringify(state.priceDatabase));
+  if (window.FirebaseSync) window.FirebaseSync.syncPrices(state.priceDatabase);
 }
 
 function initPWA() {
@@ -223,29 +292,90 @@ function calculateTieredDiscount(unitPrice, qty, discountStr) {
 }
 
 /**
- * F-04: Komparator Harga Realtime vs Bulan Lalu
+ * F-04: Komparator Harga Realtime vs Riwayat Toko & Tanggal Sebelumnya
+ * • Panah Merah Naik (↑): Jika harga naik dibanding riwayat bulan lalu di toko tersebut (+Rp selisih)
+ * • Panah Hijau Turun (↓): Jika harga turun dibanding riwayat bulan lalu di toko tersebut (-Rp hemat)
+ * • Tanda Setara (=): Jika harga stabil/tetap
  */
-function comparePriceWithPrevious(itemName, currentUnitPrice) {
+function comparePriceWithPrevious(itemName, currentUnitPrice, targetStore) {
   if (!itemName || !currentUnitPrice) return null;
   const normalizedKey = itemName.trim().toLowerCase();
-  
-  // Try exact or fuzzy match
-  let previousRecord = state.priceDatabase[normalizedKey];
-  if (!previousRecord) {
-    const keys = Object.keys(state.priceDatabase);
-    const matchedKey = keys.find(k => normalizedKey.includes(k) || k.includes(normalizedKey));
-    if (matchedKey) {
-      previousRecord = state.priceDatabase[matchedKey];
+  const currentStore = (targetStore || state.currentSession.storeName || '').trim();
+
+  let foundRecord = null;
+  let isStoreExactMatch = false;
+
+  // 1. Prioritas 1: Cari dari riwayat sesi belanja (state.history) pada toko yang sama
+  if (state.history && state.history.length > 0) {
+    for (const trip of state.history) {
+      const storeMatches = trip.storeName && currentStore && 
+        (trip.storeName.toLowerCase().includes(currentStore.toLowerCase()) || 
+         currentStore.toLowerCase().includes(trip.storeName.toLowerCase()));
+
+      if (trip.items && Array.isArray(trip.items)) {
+        const matchingItem = trip.items.find(i => {
+          const itemKey = i.name.trim().toLowerCase();
+          return itemKey === normalizedKey || itemKey.includes(normalizedKey) || normalizedKey.includes(itemKey);
+        });
+
+        if (matchingItem && matchingItem.unitPrice) {
+          if (storeMatches) {
+            foundRecord = {
+              price: matchingItem.unitPrice,
+              storeName: trip.storeName,
+              date: trip.date,
+              name: matchingItem.name
+            };
+            isStoreExactMatch = true;
+            break;
+          } else if (!foundRecord) {
+            foundRecord = {
+              price: matchingItem.unitPrice,
+              storeName: trip.storeName,
+              date: trip.date,
+              name: matchingItem.name
+            };
+          }
+        }
+      }
     }
   }
 
-  if (!previousRecord || !previousRecord.price) {
-    return { status: 'new', diff: 0, percent: 0, prevPrice: null };
+  // 2. Prioritas 2: Cari di priceDatabase
+  if (!isStoreExactMatch && state.priceDatabase) {
+    let dbRecord = state.priceDatabase[normalizedKey];
+    if (!dbRecord) {
+      const keys = Object.keys(state.priceDatabase);
+      const matchedKey = keys.find(k => normalizedKey.includes(k) || k.includes(normalizedKey));
+      if (matchedKey) dbRecord = state.priceDatabase[matchedKey];
+    }
+
+    if (dbRecord && dbRecord.price) {
+      const dbStoreMatches = dbRecord.storeName && currentStore && 
+        (dbRecord.storeName.toLowerCase().includes(currentStore.toLowerCase()) || 
+         currentStore.toLowerCase().includes(dbRecord.storeName.toLowerCase()));
+
+      if (dbStoreMatches || !foundRecord) {
+        foundRecord = {
+          price: dbRecord.price,
+          storeName: dbRecord.storeName || currentStore || 'Supermarket',
+          date: dbRecord.date || 'Bulan lalu',
+          name: dbRecord.name || itemName
+        };
+        if (dbStoreMatches) isStoreExactMatch = true;
+      }
+    }
   }
 
-  const prevPrice = previousRecord.price;
+  if (!foundRecord || !foundRecord.price) {
+    return { status: 'new', diff: 0, percent: 0, prevPrice: null, storeName: currentStore };
+  }
+
+  const prevPrice = foundRecord.price;
   const diff = currentUnitPrice - prevPrice;
   const percent = prevPrice > 0 ? ((diff / prevPrice) * 100) : 0;
+  const storeContext = foundRecord.storeName ? foundRecord.storeName : (currentStore || 'Toko Sebelumnya');
+  const dateContext = foundRecord.date ? formatDate(foundRecord.date) : 'Bulan lalu';
 
   if (diff > 0) {
     return {
@@ -253,8 +383,12 @@ function comparePriceWithPrevious(itemName, currentUnitPrice) {
       diff,
       percent: Math.abs(percent).toFixed(1),
       prevPrice,
-      label: `Naik ${formatRupiah(diff)} (+${Math.abs(percent).toFixed(1)}%)`,
-      icon: 'trending-up'
+      prevStore: storeContext,
+      prevDate: dateContext,
+      isExactStore: isStoreExactMatch,
+      label: `↑ Naik +${formatRupiah(diff)} (+${Math.abs(percent).toFixed(1)}%)`,
+      icon: 'arrow-up',
+      badgeClass: 'price-up'
     };
   } else if (diff < 0) {
     return {
@@ -262,17 +396,25 @@ function comparePriceWithPrevious(itemName, currentUnitPrice) {
       diff: Math.abs(diff),
       percent: Math.abs(percent).toFixed(1),
       prevPrice,
-      label: `Turun ${formatRupiah(Math.abs(diff))} (-${Math.abs(percent).toFixed(1)}%)`,
-      icon: 'trending-down'
+      prevStore: storeContext,
+      prevDate: dateContext,
+      isExactStore: isStoreExactMatch,
+      label: `↓ Turun -${formatRupiah(Math.abs(diff))} (-${Math.abs(percent).toFixed(1)}%)`,
+      icon: 'arrow-down',
+      badgeClass: 'price-down'
     };
   } else {
     return {
       status: 'equal',
       diff: 0,
-      percent: 0,
+      percent: '0.0',
       prevPrice,
-      label: `Stabil = ${formatRupiah(prevPrice)}`,
-      icon: 'minus'
+      prevStore: storeContext,
+      prevDate: dateContext,
+      isExactStore: isStoreExactMatch,
+      label: `= Stabil (${formatRupiah(prevPrice)})`,
+      icon: 'minus',
+      badgeClass: 'price-equal'
     };
   }
 }
@@ -298,6 +440,9 @@ function renderApp() {
 
 /**
  * F-05: Pengendali Anggaran (Safety Cap Sticky Header)
+ * Indikator warna visual:
+ * • Kuning waspada (≥90%)
+ * • Banner merah tegas (>100%) jika total melampaui limit dompet
  */
 function renderBudgetHeaderCard() {
   const safetyCard = document.getElementById('budgetSafetyCard');
@@ -317,26 +462,26 @@ function renderBudgetHeaderCard() {
 
   const budget = state.budgetCap;
   const remaining = budget - totalSpent;
-  const percentUsed = budget > 0 ? Math.min(200, (totalSpent / budget) * 100) : 0;
+  const percentUsed = budget > 0 ? (totalSpent / budget) * 100 : 0;
 
-  // Visual status & Colors
+  // F-05 Visual status & Colors
   let statusClass = 'status-safe';
   let pillClass = 'pill-safe';
   let pillText = 'Aman Terkendali';
   let progressFillClass = '';
 
-  if (percentUsed >= 100) {
+  if (percentUsed > 100) {
     statusClass = 'status-danger';
     pillClass = 'pill-danger';
-    pillText = '⚠️ OVERBUDGET!';
+    pillText = '🚨 OVERBUDGET (>100%)';
     progressFillClass = 'fill-danger';
-  } else if (percentUsed >= 85) {
+  } else if (percentUsed >= 90) {
     statusClass = 'status-warning';
     pillClass = 'pill-warning';
-    pillText = '⚡ Mendekati Limit';
+    pillText = '⚡ WASPADA (≥90%) MENDEKATI LIMIT';
     progressFillClass = 'fill-warning';
-  } else if (percentUsed >= 65) {
-    pillText = '👍 Masih Longgar';
+  } else if (percentUsed >= 70) {
+    pillText = '👍 Terkendali';
   }
 
   safetyCard.className = `budget-safety-card ${statusClass}`;
@@ -344,7 +489,7 @@ function renderBudgetHeaderCard() {
   safetyCard.innerHTML = `
     <div class="budget-card-header">
       <div class="budget-status-pill ${pillClass}">
-        <i data-lucide="${percentUsed >= 100 ? 'alert-triangle' : percentUsed >= 85 ? 'shield-alert' : 'shield-check'}" style="width:14px; height:14px;"></i>
+        <i data-lucide="${percentUsed > 100 ? 'alert-triangle' : percentUsed >= 90 ? 'shield-alert' : 'shield-check'}" style="width:14px; height:14px;"></i>
         <span>${pillText}</span>
       </div>
       <button class="budget-edit-trigger" id="btnQuickEditBudget">
@@ -369,14 +514,14 @@ function renderBudgetHeaderCard() {
     </div>
 
     <div class="budget-progress-footer">
-      <span>Terpakai <strong class="percent-used">${percentUsed.toFixed(0)}%</strong> dari total limit</span>
+      <span>Terpakai <strong class="percent-used">${percentUsed.toFixed(1)}%</strong> dari total limit</span>
       ${totalSaved > 0 ? `<span style="color:#fbbf24; font-weight:700;">Hemat: ${formatRupiah(totalSaved)}</span>` : `<span>${state.cart.length} item di troli</span>`}
     </div>
 
-    ${percentUsed >= 100 ? `
+    ${percentUsed > 100 ? `
       <div class="overbudget-alert-banner">
-        <i data-lucide="alert-octagon" style="width:16px; height:16px; flex-shrink:0;"></i>
-        <span>Perhatian! Pengeluaran telah melampaui limit sebesar ${formatRupiah(Math.abs(remaining))}. Evaluasi barang belanjaan Anda!</span>
+        <i data-lucide="alert-octagon" style="width:18px; height:18px; flex-shrink:0;"></i>
+        <span><strong>PERHATIAN OVERBUDGET (>100%)!</strong> Total belanja telah melampaui limit dompet sebesar ${formatRupiah(Math.abs(remaining))}. Evaluasi kembali barang belanjaan Anda!</span>
       </div>
     ` : ''}
   `;
@@ -387,7 +532,7 @@ function renderBudgetHeaderCard() {
   });
 
   // Haptic feedback trigger on mobile if danger
-  if (percentUsed >= 100 && 'vibrate' in navigator) {
+  if (percentUsed > 100 && 'vibrate' in navigator) {
     try { navigator.vibrate([100, 50, 100]); } catch(e) {}
   }
 }
@@ -456,14 +601,15 @@ function renderCartView() {
 
   listContainer.innerHTML = filteredItems.map(item => {
     const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
-    const comp = comparePriceWithPrevious(item.name, item.unitPrice);
+    const comp = comparePriceWithPrevious(item.name, item.unitPrice, state.currentSession.storeName);
     const catObj = DEFAULT_CATEGORIES.find(c => c.id === item.category) || { name: item.category || 'Lainnya', color: '#64748b' };
 
     let compBadgeHtml = '';
     if (comp && comp.status !== 'new') {
-      const compClass = comp.status === 'up' ? 'price-up' : comp.status === 'down' ? 'price-down' : 'price-equal';
+      const compClass = comp.badgeClass || (comp.status === 'up' ? 'price-up' : comp.status === 'down' ? 'price-down' : 'price-equal');
+      const tooltip = `Riwayat di ${comp.prevStore || 'Supermarket'} (${comp.prevDate || 'Sebelumnya'}): ${formatRupiah(comp.prevPrice)}`;
       compBadgeHtml = `
-        <span class="price-comparator-badge ${compClass}" title="Bulan lalu: ${formatRupiah(comp.prevPrice)}">
+        <span class="price-comparator-badge ${compClass}" title="${escapeHtml(tooltip)}">
           <i data-lucide="${comp.icon}" style="width:11px; height:11px;"></i>
           <span>${comp.label}</span>
         </span>
@@ -505,7 +651,7 @@ function renderCartView() {
         <div class="grocery-card-bottom">
           <div class="qty-stepper">
             <button class="stepper-btn" onclick="updateItemQty('${item.id}', -1)" aria-label="Kurangi kuantitas">−</button>
-            <span class="stepper-value">${item.qty}</span>
+            <input type="number" class="stepper-qty-input" value="${item.qty}" min="0.1" step="any" oninput="setItemQtyDirect('${item.id}', this.value)" aria-label="Kuantitas">
             <span class="stepper-unit">${item.unit || 'pcs'}</span>
             <button class="stepper-btn" onclick="updateItemQty('${item.id}', 1)" aria-label="Tambah kuantitas">+</button>
           </div>
@@ -715,19 +861,43 @@ function toggleCheckItem(id) {
 function updateItemQty(id, delta) {
   const item = state.cart.find(i => i.id === id);
   if (item) {
-    const newQty = item.qty + delta;
+    const newQty = Math.round((item.qty + delta) * 100) / 100;
     if (newQty <= 0) {
-      // Remove item confirmation
-      if (confirm(`Hapus "${item.name}" dari keranjang belanja?`)) {
-        state.cart = state.cart.filter(i => i.id !== id);
-        saveCartToStorage();
-        showToast(`Item "${item.name}" dihapus`, 'warning');
-        renderApp();
-      }
+      state.cart = state.cart.filter(i => i.id !== id);
+      saveCartToStorage();
+      showToast(`Item "${item.name}" dihapus dari troli`, 'warning');
+      renderApp();
     } else {
       item.qty = newQty;
       saveCartToStorage();
       renderApp();
+    }
+  }
+}
+
+/**
+ * F-02: Perhitungan Kuantitas Otomatis secara Realtime
+ * Perubahan angka kuantitas (Qty) langsung mengalikan harga satuan detik itu juga ke total baris item tanpa reload.
+ */
+function setItemQtyDirect(id, val) {
+  const parsed = parseFloat(val);
+  if (isNaN(parsed) || parsed <= 0) return;
+  const item = state.cart.find(i => i.id === id);
+  if (item) {
+    item.qty = Math.round(parsed * 100) / 100;
+    saveCartToStorage();
+    renderBudgetHeaderCard();
+    const card = document.querySelector(`.grocery-card[data-id="${id}"]`);
+    if (card) {
+      const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
+      const totalEl = card.querySelector('.card-item-total');
+      if (totalEl) {
+        const hasDiscount = calc.discountAmount > 0;
+        totalEl.innerHTML = `
+          ${hasDiscount ? `<div class="orig-price-strike">${formatRupiah(calc.originalSubtotal)}</div>` : ''}
+          <div class="final-price">${formatRupiah(calc.finalTotal)}</div>
+        `;
+      }
     }
   }
 }
@@ -744,6 +914,7 @@ function openAddItemModal() {
   document.getElementById('inputItemNote').value = '';
   
   updateLiveComparatorBox('', 0);
+  updateModalItemTotalPreview();
   openModal('itemFormModal');
   setTimeout(() => document.getElementById('inputItemName').focus(), 150);
 }
@@ -763,6 +934,7 @@ function openEditItemModal(id) {
   document.getElementById('inputItemNote').value = item.note || '';
 
   updateLiveComparatorBox(item.name, item.unitPrice);
+  updateModalItemTotalPreview();
   openModal('itemFormModal');
 }
 
@@ -820,7 +992,7 @@ function saveItemFromForm() {
 }
 
 /**
- * F-04: Live comparator box in Add/Edit modal
+ * F-04: Live comparator box in Add/Edit modal (Realtime vs Riwayat Toko & Tanggal Sebelumnya)
  */
 function updateLiveComparatorBox(name, price) {
   const box = document.getElementById('modalLiveComparatorBox');
@@ -831,16 +1003,16 @@ function updateLiveComparatorBox(name, price) {
     return;
   }
 
-  const comp = comparePriceWithPrevious(name, price);
+  const comp = comparePriceWithPrevious(name, price, state.currentSession.storeName);
   if (!comp || comp.status === 'new') {
     box.style.display = 'flex';
     box.innerHTML = `
       <div class="live-comp-icon" style="background:rgba(59, 130, 246, 0.15); color:#60a5fa;">
         <i data-lucide="sparkles" style="width:18px; height:18px;"></i>
       </div>
-      <div class="live-comp-info">
-        <div class="live-comp-title">Item Baru</div>
-        <div class="live-comp-status" style="color:#93c5fd;">Belum ada data harga bulan lalu untuk item ini.</div>
+      <div class="live-comp-info" style="min-width:0; flex:1;">
+        <div class="live-comp-title" style="font-size:0.75rem; color:var(--text-secondary);">Item Baru / Belum Ada Riwayat</div>
+        <div class="live-comp-status" style="color:#93c5fd; font-size:0.82rem; font-weight:600;">Akan dicatat sebagai harga perdana di ${escapeHtml(state.currentSession.storeName || 'Toko Aktif')}</div>
       </div>
     `;
     initLucideIcons();
@@ -851,20 +1023,50 @@ function updateLiveComparatorBox(name, price) {
   const isUp = comp.status === 'up';
   const isDown = comp.status === 'down';
   const color = isUp ? '#f87171' : isDown ? '#34d399' : '#cbd5e1';
-  const bg = isUp ? 'rgba(239,68,68,0.15)' : isDown ? 'rgba(16,185,129,0.15)' : 'rgba(148,163,184,0.15)';
+  const bg = isUp ? 'rgba(239,68,68,0.18)' : isDown ? 'rgba(16,185,129,0.18)' : 'rgba(148,163,184,0.18)';
+  const storeContext = comp.prevStore ? `di ${comp.prevStore} (${comp.prevDate || 'Bulan lalu'})` : 'bulan lalu';
 
   box.innerHTML = `
     <div class="live-comp-icon" style="background:${bg}; color:${color};">
       <i data-lucide="${comp.icon}" style="width:18px; height:18px;"></i>
     </div>
-    <div class="live-comp-info">
-      <div class="live-comp-title">Komparasi vs Bulan Lalu (${formatRupiah(comp.prevPrice)})</div>
-      <div class="live-comp-status" style="color:${color};">
+    <div class="live-comp-info" style="min-width:0; flex:1;">
+      <div class="live-comp-title" style="font-size:0.72rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        Riwayat ${escapeHtml(storeContext)}: <strong>${formatRupiah(comp.prevPrice)}</strong>
+      </div>
+      <div class="live-comp-status" style="color:${color}; font-weight:700; font-size:0.85rem;">
         ${comp.label}
       </div>
     </div>
   `;
   initLucideIcons();
+}
+
+/**
+ * F-02 & F-03: Live subtotal calculation inside Item Form Modal
+ */
+function updateModalItemTotalPreview() {
+  const box = document.getElementById('modalItemLiveTotalBox');
+  if (!box) return;
+
+  const qty = parseFloat(document.getElementById('inputItemQty')?.value) || 0;
+  const unitPrice = parseFloat(document.getElementById('inputItemUnitPrice')?.value) || 0;
+  const discountStr = document.getElementById('inputItemDiscount')?.value || '';
+
+  if (qty <= 0 || unitPrice <= 0) {
+    box.style.display = 'none';
+    return;
+  }
+
+  const calc = calculateTieredDiscount(unitPrice, qty, discountStr);
+  box.style.display = 'flex';
+  box.innerHTML = `
+    <div>
+      <div style="font-size:0.75rem; color:var(--text-secondary);">Subtotal (${qty} x ${formatRupiah(unitPrice)}):</div>
+      ${calc.discountAmount > 0 ? `<div style="font-size:0.72rem; color:#fbbf24;">Diskon: -${formatRupiah(calc.discountAmount)} (${calc.discountPercentage.toFixed(0)}%)</div>` : ''}
+    </div>
+    <div class="total-val">${formatRupiah(calc.finalTotal)}</div>
+  `;
 }
 
 /* ==========================================================================
@@ -935,7 +1137,7 @@ function saveDiscountSetting() {
 }
 
 /* ==========================================================================
-   CHECKOUT & FINISH TRIP (F-06)
+   CHECKOUT & FINISH TRIP (F-01, F-06)
    ========================================================================== */
 function openCheckoutSummaryModal() {
   if (state.cart.length === 0) {
@@ -957,10 +1159,16 @@ function openCheckoutSummaryModal() {
   const remaining = state.budgetCap - totalSpent;
   const now = new Date();
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-  const defaultTripTitle = `Belanja Bulanan - ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  const storePrefix = (state.currentSession.storeName || 'Supermarket').split(' - ')[0];
+  const defaultTripTitle = `Belanja di ${storePrefix} - ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
-  document.getElementById('inputCheckoutTripTitle').value = defaultTripTitle;
-  document.getElementById('inputCheckoutStore').value = 'Super Indo / Alfamidi / Indomaret';
+  const titleInput = document.getElementById('inputCheckoutTripTitle');
+  const storeInput = document.getElementById('inputCheckoutStore');
+  const dateInput = document.getElementById('inputCheckoutDate');
+
+  if (titleInput) titleInput.value = defaultTripTitle;
+  if (storeInput) storeInput.value = state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
+  if (dateInput) dateInput.value = state.currentSession.date || new Date().toISOString().split('T')[0];
   
   document.getElementById('checkoutSummaryContent').innerHTML = `
     <div style="background:rgba(0,0,0,0.3); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
@@ -979,8 +1187,9 @@ function openCheckoutSummaryModal() {
 }
 
 function finishAndSaveTrip() {
-  const title = document.getElementById('inputCheckoutTripTitle').value.trim() || 'Belanja Bulanan Kos';
-  const store = document.getElementById('inputCheckoutStore').value.trim() || 'Supermarket';
+  const title = document.getElementById('inputCheckoutTripTitle')?.value.trim() || 'Belanja Bulanan Kos';
+  const store = document.getElementById('inputCheckoutStore')?.value.trim() || state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
+  const tripDate = document.getElementById('inputCheckoutDate')?.value || state.currentSession.date || new Date().toISOString().split('T')[0];
 
   let totalOriginal = 0;
   let totalSpent = 0;
@@ -992,13 +1201,15 @@ function finishAndSaveTrip() {
     totalSpent += calc.finalTotal;
     totalSaved += calc.discountAmount;
 
-    // F-06: Automatically update database acuan harga untuk bulan berikutnya!
+    // F-06: Automatically update database acuan harga multi-toko untuk sesi belanja berikutnya!
     const key = item.name.trim().toLowerCase();
     state.priceDatabase[key] = {
       name: item.name,
       category: item.category,
       unit: item.unit,
       price: item.unitPrice,
+      storeName: store,
+      date: tripDate,
       lastUpdated: new Date().toISOString()
     };
 
@@ -1017,7 +1228,7 @@ function finishAndSaveTrip() {
 
   const newHistoryRecord = {
     id: 'trip-' + Date.now(),
-    date: new Date().toISOString().split('T')[0],
+    date: tripDate,
     title,
     storeName: store,
     budget: state.budgetCap,
@@ -1037,7 +1248,7 @@ function finishAndSaveTrip() {
   saveCartToStorage();
 
   closeModal('checkoutModal');
-  showToast('Belanjaan berhasil diarsipkan ke Riwayat & Database!', 'success');
+  showToast(`Sesi belanja "${title}" di ${store} tersimpan ke database riwayat!`, 'success');
   switchTab('riwayat');
 }
 
@@ -1091,10 +1302,6 @@ function copyTripToCart(tripId) {
   const trip = state.history.find(t => t.id === tripId);
   if (!trip || !trip.items) return;
 
-  if (state.cart.length > 0) {
-    if (!confirm('Troli saat ini sudah ada isinya. Tambahkan item riwayat ini ke troli?')) return;
-  }
-
   const newItems = trip.items.map(item => ({
     id: 'cart-' + Math.random().toString(36).substr(2, 9),
     name: item.name,
@@ -1110,7 +1317,7 @@ function copyTripToCart(tripId) {
   state.cart = [...state.cart, ...newItems];
   saveCartToStorage();
   closeModal('historyDetailModal');
-  showToast(`${newItems.length} item dimuat ke troli!`, 'success');
+  showToast(`${newItems.length} item riwayat ditambahkan ke troli!`, 'success');
   switchTab('belanja');
 }
 
@@ -1184,6 +1391,7 @@ function setupAutocomplete() {
           if (rec.category) document.getElementById('selectItemCategory').value = rec.category;
           if (rec.unit) document.getElementById('selectItemUnit').value = rec.unit;
           updateLiveComparatorBox(rec.name || key, rec.price);
+          updateModalItemTotalPreview();
         }
         suggestionsBox.classList.remove('active');
       });
@@ -1193,6 +1401,18 @@ function setupAutocomplete() {
   document.getElementById('inputItemUnitPrice')?.addEventListener('input', (e) => {
     const price = parseFloat(e.target.value) || 0;
     updateLiveComparatorBox(input.value, price);
+    updateModalItemTotalPreview();
+  });
+
+  document.getElementById('inputItemQty')?.addEventListener('input', () => {
+    const unitPriceInput = document.getElementById('inputItemUnitPrice');
+    const price = parseFloat(unitPriceInput?.value) || 0;
+    updateLiveComparatorBox(input.value, price);
+    updateModalItemTotalPreview();
+  });
+
+  document.getElementById('inputItemDiscount')?.addEventListener('input', () => {
+    updateModalItemTotalPreview();
   });
 }
 
@@ -1200,6 +1420,32 @@ function setupAutocomplete() {
    NAVIGATION & EVENT LISTENERS
    ========================================================================== */
 function setupEventListeners() {
+  // F-01: Session Store Input (Lokasi Toko)
+  const sessionStoreEl = document.getElementById('sessionStoreInput');
+  if (sessionStoreEl) {
+    const handleStoreChange = (e) => {
+      const val = e.target.value.trim();
+      state.currentSession.storeName = val || 'Lotte Mart Grocery - Puri Indah';
+      saveSessionToStorage();
+      renderCartView();
+      initLucideIcons();
+    };
+    sessionStoreEl.addEventListener('input', handleStoreChange);
+    sessionStoreEl.addEventListener('change', handleStoreChange);
+  }
+
+  // F-01: Session Date Picker (Selector Tanggal)
+  const sessionDateEl = document.getElementById('sessionDateInput');
+  if (sessionDateEl) {
+    sessionDateEl.addEventListener('change', (e) => {
+      state.currentSession.date = e.target.value;
+      saveSessionToStorage();
+      updateSessionBadgeDate(e.target.value);
+      renderCartView();
+      initLucideIcons();
+    });
+  }
+
   // Bottom Tabs Click
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1248,7 +1494,81 @@ function setupEventListeners() {
     });
   });
 
+  // Item Options Action Sheet buttons
+  document.getElementById('btnActionEditItem')?.addEventListener('click', () => {
+    const id = state.optionsItemId;
+    closeModal('itemOptionsModal');
+    if (id) openEditItemModal(id);
+  });
+
+  document.getElementById('btnActionDiscountItem')?.addEventListener('click', () => {
+    const id = state.optionsItemId;
+    closeModal('itemOptionsModal');
+    if (id) openDiscountModal(id);
+  });
+
+  document.getElementById('btnActionDeleteItem')?.addEventListener('click', () => {
+    const id = state.optionsItemId;
+    if (id) {
+      const item = state.cart.find(i => i.id === id);
+      state.cart = state.cart.filter(i => i.id !== id);
+      saveCartToStorage();
+      closeModal('itemOptionsModal');
+      showToast(`Item "${item ? item.name : 'Barang'}" dihapus dari troli`, 'warning');
+      renderApp();
+    }
+  });
+
   setupAutocomplete();
+  setupSwipeNavigation();
+}
+
+/**
+ * Mobile Swipe Gesture Navigation between Tabs
+ */
+function setupSwipeNavigation() {
+  const viewport = document.getElementById('appViewport');
+  if (!viewport) return;
+
+  let startX = 0;
+  let startY = 0;
+  let isSwiping = false;
+
+  viewport.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.modal-overlay') || e.target.closest('#categoryScrollPills') || e.target.closest('.qty-stepper') || e.target.closest('input') || e.target.closest('select')) {
+      isSwiping = false;
+      return;
+    }
+    const touch = e.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    isSwiping = true;
+  }, { passive: true });
+
+  viewport.addEventListener('touchend', (e) => {
+    if (!isSwiping) return;
+    isSwiping = false;
+
+    const touch = e.changedTouches[0];
+    const diffX = touch.clientX - startX;
+    const diffY = touch.clientY - startY;
+
+    // Minimum swipe threshold: 50px horizontally, horizontal must dominate vertical by 1.4x
+    if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.4) {
+      const tabs = ['belanja', 'anggaran', 'riwayat'];
+      const currentIdx = tabs.indexOf(state.activeTab);
+
+      if (diffX < 0 && currentIdx < tabs.length - 1) {
+        // Swipe left -> Next tab
+        switchTab(tabs[currentIdx + 1]);
+        if ('vibrate' in navigator) try { navigator.vibrate(20); } catch(e) {}
+      } else if (diffX > 0 && currentIdx > 0) {
+        // Swipe right -> Previous tab
+        switchTab(tabs[currentIdx - 1]);
+        if ('vibrate' in navigator) try { navigator.vibrate(20); } catch(e) {}
+      }
+    }
+  }, { passive: true });
 }
 
 function switchTab(tabId) {
@@ -1294,14 +1614,15 @@ function openItemOptionsModal(id) {
   const item = state.cart.find(i => i.id === id);
   if (!item) return;
 
-  if (confirm(`Pilih tindakan untuk "${item.name}":\n- Klik OK untuk Edit\n- Klik Batal untuk Hapus`)) {
-    openEditItemModal(id);
-  } else {
-    state.cart = state.cart.filter(i => i.id !== id);
-    saveCartToStorage();
-    showToast(`"${item.name}" dihapus`, 'warning');
-    renderApp();
-  }
+  state.optionsItemId = id;
+  const titleEl = document.getElementById('itemOptionsTitle');
+  const subEl = document.getElementById('itemOptionsSub');
+  
+  if (titleEl) titleEl.textContent = item.name;
+  if (subEl) subEl.textContent = `${formatRupiah(item.unitPrice)} / ${item.unit || 'pcs'} • Qty: ${item.qty}`;
+
+  openModal('itemOptionsModal');
+  initLucideIcons();
 }
 
 /* ==========================================================================

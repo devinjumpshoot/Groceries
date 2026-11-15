@@ -19,47 +19,296 @@ const DEFAULT_UNITS = [
   'pcs', 'kg', 'liter', 'pack', 'gram', 'botol', 'dus', 'sachet', 'ikat', 'kaleng'
 ];
 
-// Database acuan harga historis bulan lalu (Harga Standar Pasar / Supermarket Anak Rantau)
+// F-01 & F-06: Daftar Referensi Toko Belanja Populer
+const POPULAR_STORES = [
+  "Lotte Mart Grocery - Puri Indah",
+  "Super Indo Swalayan",
+  "Alfamidi Super",
+  "Hypermart Cyberpark",
+  "Grand Lucky Superstore",
+  "Transmart Carrefour",
+  "Indomaret Fresh"
+];
+
+// F-04 & F-06: Database acuan harga historis bulan lalu per toko & tanggal
 const DEFAULT_PREVIOUS_MONTH_PRICES = {
-  "beras ramos 5kg": { name: "Beras Ramos 5kg", category: "sembako", unit: "pack", price: 74000 },
-  "beras setra ramos 5kg": { name: "Beras Setra Ramos 5kg", category: "sembako", unit: "pack", price: 76000 },
-  "minyak goreng 2 liter": { name: "Minyak Goreng 2 Liter", category: "bumbu", unit: "pack", price: 34500 },
-  "minyak goreng tropical 2l": { name: "Minyak Goreng Tropical 2L", category: "bumbu", unit: "pack", price: 35000 },
-  "minyak goreng sania 2l": { name: "Minyak Goreng Sania 2L", category: "bumbu", unit: "pack", price: 34000 },
-  "telur ayam negeri 1kg": { name: "Telur Ayam Negeri 1kg", category: "protein", unit: "kg", price: 29000 },
-  "telur ayam 1kg": { name: "Telur Ayam 1kg", category: "protein", unit: "kg", price: 29000 },
-  "indomie goreng 1 dus": { name: "Indomie Goreng 1 Dus (40 pcs)", category: "instan", unit: "dus", price: 118000 },
-  "indomie goreng": { name: "Indomie Goreng", category: "instan", unit: "pcs", price: 3100 },
-  "indomie ayam bawang": { name: "Indomie Ayam Bawang", category: "instan", unit: "pcs", price: 3000 },
-  "susu ultra milk 1l": { name: "Susu Ultra Milk 1L", category: "minuman", unit: "pcs", price: 19500 },
-  "susu uht full cream 1 liter": { name: "Susu UHT Full Cream 1 Liter", category: "minuman", unit: "pcs", price: 19500 },
-  "kecap manis bango 520ml": { name: "Kecap Manis Bango 520ml", category: "bumbu", unit: "pack", price: 24500 },
-  "saus sambal abc 335ml": { name: "Saus Sambal ABC 335ml", category: "bumbu", unit: "botol", price: 16500 },
-  "dada ayam fillet 1kg": { name: "Dada Ayam Fillet 1kg", category: "protein", unit: "kg", price: 52000 },
-  "tempe papan": { name: "Tempe Papan", category: "protein", unit: "pcs", price: 6000 },
-  "tahu sutra putih": { name: "Tahu Sutra Putih", category: "protein", unit: "pack", price: 8000 },
-  "sabun mandi cair lifebuoy 450ml": { name: "Sabun Mandi Cair Lifebuoy 450ml", category: "mandi", unit: "pack", price: 22000 },
-  "shampoo pantene 290ml": { name: "Shampoo Pantene 290ml", category: "mandi", unit: "botol", price: 36000 },
-  "pasta gigi pepsodent 225g": { name: "Pasta Gigi Pepsodent 225g", category: "mandi", unit: "pcs", price: 17500 },
-  "deterjen soklin cair 750ml": { name: "Deterjen SoKlin Cair 750ml", category: "mandi", unit: "pack", price: 18500 },
-  "pelembut royale soklin 720ml": { name: "Pelembut Royale SoKlin 720ml", category: "mandi", unit: "pack", price: 16000 },
-  "tisu paseo 250 sheets": { name: "Tisu Paseo 250 Sheets", category: "mandi", unit: "pack", price: 13500 },
-  "bawang merah 500g": { name: "Bawang Merah 500g", category: "bumbu", unit: "pack", price: 21000 },
-  "bawang putih 500g": { name: "Bawang Putih 500g", category: "bumbu", unit: "pack", price: 22500 },
-  "cabai rawit merah 250g": { name: "Cabai Rawit Merah 250g", category: "bumbu", unit: "pack", price: 18000 },
-  "roti tawar kupas sari roti": { name: "Roti Tawar Kupas Sari Roti", category: "camilan", unit: "pack", price: 16500 },
-  "kopi kapal api special 165g": { name: "Kopi Kapal Api Special 165g", category: "minuman", unit: "pack", price: 15500 },
-  "gula pasir gulaku 1kg": { name: "Gula Pasir Gulaku 1kg", category: "sembako", unit: "kg", price: 18000 },
-  "garam dapur cap kapal 250g": { name: "Garam Dapur Cap Kapal 250g", category: "bumbu", unit: "pack", price: 4000 },
-  "biskuit roma kelapa 300g": { name: "Biskuit Roma Kelapa 300g", category: "camilan", unit: "pack", price: 11000 }
+  "beras ramos 5kg": { 
+    name: "Beras Ramos 5kg", 
+    category: "sembako", 
+    unit: "pack", 
+    price: 74000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "beras setra ramos 5kg": { 
+    name: "Beras Setra Ramos 5kg", 
+    category: "sembako", 
+    unit: "pack", 
+    price: 76000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-10"
+  },
+  "minyak goreng 2 liter": { 
+    name: "Minyak Goreng 2 Liter", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 34500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "minyak goreng tropical 2l": { 
+    name: "Minyak Goreng Tropical 2L", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 35000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "minyak goreng sania 2l": { 
+    name: "Minyak Goreng Sania 2L", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 34000,
+    storeName: "Alfamidi Super",
+    date: "2026-10-12"
+  },
+  "telur ayam negeri 1kg": { 
+    name: "Telur Ayam Negeri 1kg", 
+    category: "protein", 
+    unit: "kg", 
+    price: 29000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "telur ayam 1kg": { 
+    name: "Telur Ayam 1kg", 
+    category: "protein", 
+    unit: "kg", 
+    price: 29000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "indomie goreng 1 dus": { 
+    name: "Indomie Goreng 1 Dus (40 pcs)", 
+    category: "instan", 
+    unit: "dus", 
+    price: 118000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "indomie goreng": { 
+    name: "Indomie Goreng", 
+    category: "instan", 
+    unit: "pcs", 
+    price: 3100,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "indomie ayam bawang": { 
+    name: "Indomie Ayam Bawang", 
+    category: "instan", 
+    unit: "pcs", 
+    price: 3000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "susu ultra milk 1l": { 
+    name: "Susu Ultra Milk 1L", 
+    category: "minuman", 
+    unit: "pcs", 
+    price: 19500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "susu uht full cream 1 liter": { 
+    name: "Susu UHT Full Cream 1 Liter", 
+    category: "minuman", 
+    unit: "pcs", 
+    price: 19500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "kecap manis bango 520ml": { 
+    name: "Kecap Manis Bango 520ml", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 24500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "saus sambal abc 335ml": { 
+    name: "Saus Sambal ABC 335ml", 
+    category: "bumbu", 
+    unit: "botol", 
+    price: 16500,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "dada ayam fillet 1kg": { 
+    name: "Dada Ayam Fillet 1kg", 
+    category: "protein", 
+    unit: "kg", 
+    price: 52000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "tempe papan": { 
+    name: "Tempe Papan", 
+    category: "protein", 
+    unit: "pcs", 
+    price: 6000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "tahu sutra putih": { 
+    name: "Tahu Sutra Putih", 
+    category: "protein", 
+    unit: "pack", 
+    price: 8000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "sabun mandi cair lifebuoy 450ml": { 
+    name: "Sabun Mandi Cair Lifebuoy 450ml", 
+    category: "mandi", 
+    unit: "pack", 
+    price: 22000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "shampoo pantene 290ml": { 
+    name: "Shampoo Pantene 290ml", 
+    category: "mandi", 
+    unit: "botol", 
+    price: 36000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "pasta gigi pepsodent 225g": { 
+    name: "Pasta Gigi Pepsodent 225g", 
+    category: "mandi", 
+    unit: "pcs", 
+    price: 17500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "deterjen soklin cair 750ml": { 
+    name: "Deterjen SoKlin Cair 750ml", 
+    category: "mandi", 
+    unit: "pack", 
+    price: 18500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "pelembut royale soklin 720ml": { 
+    name: "Pelembut Royale SoKlin 720ml", 
+    category: "mandi", 
+    unit: "pack", 
+    price: 16000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "tisu paseo 250 sheets": { 
+    name: "Tisu Paseo 250 Sheets", 
+    category: "mandi", 
+    unit: "pack", 
+    price: 13500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "bawang merah 500g": { 
+    name: "Bawang Merah 500g", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 21000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "bawang putih 500g": { 
+    name: "Bawang Putih 500g", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 22500,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "cabai rawit merah 250g": { 
+    name: "Cabai Rawit Merah 250g", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 18000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "roti tawar kupas sari roti": { 
+    name: "Roti Tawar Kupas Sari Roti", 
+    category: "camilan", 
+    unit: "pack", 
+    price: 16500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "kopi kapal api special 165g": { 
+    name: "Kopi Kapal Api Special 165g", 
+    category: "minuman", 
+    unit: "pack", 
+    price: 15500,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "gula pasir gulaku 1kg": { 
+    name: "Gula Pasir Gulaku 1kg", 
+    category: "sembako", 
+    unit: "kg", 
+    price: 18000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  },
+  "garam dapur cap kapal 250g": { 
+    name: "Garam Dapur Cap Kapal 250g", 
+    category: "bumbu", 
+    unit: "pack", 
+    price: 4000,
+    storeName: "Super Indo Swalayan",
+    date: "2026-10-08"
+  },
+  "biskuit roma kelapa 300g": { 
+    name: "Biskuit Roma Kelapa 300g", 
+    category: "camilan", 
+    unit: "pack", 
+    price: 11000,
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    date: "2026-10-14"
+  }
 };
 
-// Data riwayat belanja sebelumnya (Bulan Lalu) untuk pertama kali onboarding
+// F-06: Data riwayat sesi belanja multi-toko tersimpan
 const INITIAL_HISTORY_DATA = [
   {
-    id: "trip-prev-month",
+    id: "trip-lotte-prev",
+    date: "2026-10-14",
+    title: "Belanja Bulanan - Lotte Mart Puri Indah",
+    storeName: "Lotte Mart Grocery - Puri Indah",
+    budget: 650000,
+    totalOriginal: 585000,
+    totalDiscount: 48000,
+    totalFinal: 537000,
+    itemCount: 8,
+    items: [
+      { id: "h01", name: "Beras Ramos 5kg", category: "sembako", unit: "pack", qty: 1, unitPrice: 74000, discountInput: "0", finalItemTotal: 74000, note: "Beras pulen keluarga" },
+      { id: "h02", name: "Minyak Goreng 2 Liter", category: "bumbu", unit: "pack", qty: 1, unitPrice: 34500, discountInput: "0", finalItemTotal: 34500, note: "Kemasan pouch" },
+      { id: "h03", name: "Telur Ayam Negeri 1kg", category: "protein", unit: "kg", qty: 2, unitPrice: 29000, discountInput: "0", finalItemTotal: 58000, note: "Pilihan segar" },
+      { id: "h04", name: "Dada Ayam Fillet 1kg", category: "protein", unit: "kg", qty: 2, unitPrice: 52000, discountInput: "10%", finalItemTotal: 93600, note: "Promo protein" },
+      { id: "h05", name: "Sabun Mandi Cair Lifebuoy 450ml", category: "mandi", unit: "pack", qty: 2, unitPrice: 22000, discountInput: "50% + 20%", finalItemTotal: 26400, note: "Promo bertingkat Lotte" },
+      { id: "h06", name: "Deterjen SoKlin Cair 750ml", category: "mandi", unit: "pack", qty: 1, unitPrice: 18500, discountInput: "0", finalItemTotal: 18500, note: "" },
+      { id: "h07", name: "Susu Ultra Milk 1L", category: "minuman", unit: "pcs", qty: 3, unitPrice: 19500, discountInput: "0", finalItemTotal: 58500, note: "Full cream" },
+      { id: "h08", name: "Indomie Goreng 1 Dus (40 pcs)", category: "instan", unit: "dus", qty: 1, unitPrice: 118000, discountInput: "5000", finalItemTotal: 113000, note: "Potongan voucher" }
+    ]
+  },
+  {
+    id: "trip-superindo-prev",
     date: "2026-09-05",
-    title: "Belanja Bulanan Kos - September 2026",
+    title: "Belanja Bulanan Kos - Super Indo",
     storeName: "Super Indo Swalayan",
     budget: 600000,
     totalOriginal: 554500,

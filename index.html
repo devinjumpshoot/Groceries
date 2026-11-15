@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090d16">
   <meta name="description" content="PWA Pendamping Belanja Bulanan Anak Rantau & Pengendali Anggaran Real-time">
-  
+
   <!-- Apple Mobile Web App Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SmartGrocery">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  
+
   <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -21,7 +23,9 @@
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -29,28 +33,30 @@
   <!-- Application Styles -->
   <link rel="stylesheet" href="css/styles.css">
 </head>
+
 <body>
 
   <!-- Desktop Backdrop Wrapper (Centers 430px Mobile Frame on Wide Screens) -->
   <div class="desktop-wrapper">
-    
+
     <!-- Mobile App Standalone Frame -->
     <main class="mobile-app-container">
-      
+
       <!-- Top Sticky Header Bar -->
       <header class="app-header">
         <div class="header-top-row">
           <div class="brand-badge">
             <div class="brand-icon">
-              <i data-lucide="shopping-bag" style="width: 22px; height: 22px;"></i>
+              <i data-lucide="shopping-bag" style="width: 20px; height: 20px;"></i>
             </div>
             <div class="brand-info">
-              <h1>Smart Grocery <span style="font-size:0.65rem; padding:2px 6px; border-radius:4px; background:rgba(16,185,129,0.2); color:#34d399; font-weight:800;">PWA</span></h1>
+              <h1>Smart Grocery <span class="pwa-tag">PWA</span> <span id="cloudSyncStatusBadge" class="cloud-status-badge synced" title="Terhubung ke Firebase Cloud Firestore"><span class="cloud-dot"></span><span>Cloud</span></span></h1>
               <span class="tagline">Anak Rantau Trolley Tracker</span>
             </div>
           </div>
           <div class="header-actions">
-            <button class="icon-btn-header" onclick="openAddItemModal()" title="Tambah Barang Cepat" aria-label="Tambah Barang">
+            <button class="icon-btn-header" onclick="openAddItemModal()" title="Tambah Barang Cepat"
+              aria-label="Tambah Barang">
               <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
             </button>
           </div>
@@ -61,21 +67,61 @@
       <div id="toastContainer" class="toast-container"></div>
 
       <!-- Main Scrollable Viewport -->
-      <section class="app-content-viewport">
-        
+      <section class="app-content-viewport" id="appViewport">
+
         <!-- F-05: Sticky Budget Safety Cap Controller -->
-        <section id="budgetSafetyCard" class="budget-safety-card status-safe" aria-label="Pengendali Anggaran"></section>
+        <section id="budgetSafetyCard" class="budget-safety-card status-safe" aria-label="Pengendali Anggaran">
+        </section>
 
         <!-- ==========================================
              TAB 1: SHOPPING CART (BELANJA)
              ========================================== -->
         <article id="view-belanja" class="tab-view active">
-          
+
+          <!-- F-01: Card Pemilihan Sesi Belanja Aktif (Lokasi Toko & Selector Tanggal) -->
+          <section class="session-info-card" id="sessionInfoCard" aria-label="Sesi Belanja Aktif">
+            <div class="session-card-header">
+              <div class="session-tag">
+                <i data-lucide="store" style="width:14px; height:14px; color:var(--primary-light);"></i>
+                <span>Sesi Belanja Aktif (F-01)</span>
+              </div>
+              <span class="session-badge-date" id="sessionActiveBadge">Hari Ini</span>
+            </div>
+            <div class="session-inputs-grid">
+              <div class="session-field">
+                <label for="sessionStoreInput">Lokasi Toko Belanja *</label>
+                <div class="session-input-wrap">
+                  <i data-lucide="map-pin" class="session-field-icon"></i>
+                  <input type="text" id="sessionStoreInput" class="session-input" list="popularStoresList"
+                    placeholder="Contoh: Lotte Mart Grocery - Puri Indah" autocomplete="off"
+                    value="Lotte Mart Grocery - Puri Indah">
+                  <datalist id="popularStoresList">
+                    <option value="Lotte Mart Grocery - Puri Indah"></option>
+                    <option value="Super Indo Swalayan"></option>
+                    <option value="Alfamidi Super"></option>
+                    <option value="Hypermart Cyberpark"></option>
+                    <option value="Grand Lucky Superstore"></option>
+                    <option value="Transmart Carrefour"></option>
+                    <option value="Indomaret Fresh"></option>
+                  </datalist>
+                </div>
+              </div>
+              <div class="session-field">
+                <label for="sessionDateInput">Tanggal Belanja (Date Picker) *</label>
+                <div class="session-input-wrap">
+                  <i data-lucide="calendar" class="session-field-icon"></i>
+                  <input type="date" id="sessionDateInput" class="session-input session-date-picker">
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Search & Filter Bar -->
           <div class="section-toolbar">
             <div class="search-filter-box">
               <i data-lucide="search" class="search-icon" style="width:16px; height:16px;"></i>
-              <input type="text" id="globalSearchInput" class="search-input" placeholder="Cari barang atau catatan..." autocomplete="off">
+              <input type="text" id="globalSearchInput" class="search-input" placeholder="Cari barang atau catatan..."
+                autocomplete="off">
             </div>
           </div>
 
@@ -105,8 +151,8 @@
       <!-- Floating Action Bar (Belanja Tab Only) -->
       <div id="floatingActionBar" class="floating-action-bar">
         <button class="fab-btn-primary" id="fabAddItem">
-          <i data-lucide="plus-circle" style="width:20px; height:20px;"></i>
-          <span>Tambah Barang (+ Item)</span>
+          <i data-lucide="plus-circle" style="width:19px; height:19px;"></i>
+          <span>Tambah Item</span>
         </button>
         <button class="fab-btn-secondary" id="fabCheckout" title="Selesaikan & Simpan Belanja">
           <i data-lucide="check-check" style="width:18px; height:18px; color:var(--primary-light);"></i>
@@ -139,192 +185,267 @@
         </button>
       </nav>
 
+      <!-- ==========================================================================
+           BOTTOM SHEET MODALS (TOUCH FRIENDLY - LOCKED INSIDE APP CONTAINER)
+           ========================================================================== -->
+
+      <!-- Modal 1: Add / Edit Item Form (F-01, F-04) -->
+      <div id="itemFormModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <h3 id="itemModalTitle">Tambah Item Belanja</h3>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x"
+                style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <div class="form-group">
+              <label class="form-label" for="inputItemName">Nama Produk / Barang *</label>
+              <input type="text" id="inputItemName" class="form-input" placeholder="Contoh: Beras Ramos 5kg, Minyak 2L"
+                autocomplete="off">
+              <div id="autocompleteSuggestions" class="autocomplete-suggestions"></div>
+            </div>
+
+            <div id="modalLiveComparatorBox" class="live-comparator-preview" style="display:none;"></div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="selectItemCategory">Kategori</label>
+                <select id="selectItemCategory" class="form-select">
+                  <option value="sembako">Sembako &amp; Beras</option>
+                  <option value="protein">Daging &amp; Protein</option>
+                  <option value="sayur_buah">Sayur &amp; Buah</option>
+                  <option value="bumbu">Bumbu &amp; Minyak</option>
+                  <option value="instan">Mie &amp; Makanan Instan</option>
+                  <option value="mandi">Mandi &amp; Kebersihan</option>
+                  <option value="minuman">Susu &amp; Minuman</option>
+                  <option value="camilan">Snack &amp; Camilan</option>
+                  <option value="lainnya">Lain-lain</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="selectItemUnit">Satuan</label>
+                <select id="selectItemUnit" class="form-select">
+                  <option value="pcs">pcs (buah)</option>
+                  <option value="kg">kg (kilogram)</option>
+                  <option value="liter">liter (L)</option>
+                  <option value="pack">pack / bungkus</option>
+                  <option value="gram">gram (gr)</option>
+                  <option value="botol">botol</option>
+                  <option value="dus">dus / karton</option>
+                  <option value="sachet">sachet</option>
+                  <option value="ikat">ikat</option>
+                  <option value="kaleng">kaleng</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="inputItemQty">Jumlah (Qty) *</label>
+                <input type="number" id="inputItemQty" class="form-input" value="1" min="0.1" step="any">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="inputItemUnitPrice">Harga Satuan (Rp) *</label>
+                <div class="input-with-prefix">
+                  <span class="input-prefix">Rp</span>
+                  <input type="number" id="inputItemUnitPrice" class="form-input" placeholder="0" min="0" step="100">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputItemDiscount">Diskon / Promo (Opsional)</label>
+              <input type="text" id="inputItemDiscount" class="form-input" placeholder="Contoh: 20%, 50%+20%, 5000">
+            </div>
+
+            <!-- F-02 & F-03: Live Line Total Preview in Modal -->
+            <div id="modalItemLiveTotalBox" class="modal-item-total-preview" style="display:none;"></div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputItemNote">Catatan / Merek Khusus</label>
+              <input type="text" id="inputItemNote" class="form-input"
+                placeholder="Contoh: Cari promo Buy 1 Get 1, atau merk Sania">
+            </div>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn"
+              style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-primary" id="btnSaveItem">
+              <i data-lucide="check" style="width:18px; height:18px;"></i>
+              <span>Simpan ke Troli</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 2: Tiered Discount Calculator Modal (F-03) -->
+      <div id="discountCalcModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <div>
+              <h3>Kalkulator Diskon Bertingkat</h3>
+              <span id="discountModalItemTitle" style="font-size:0.75rem; color:var(--text-secondary);"></span>
+            </div>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x"
+                style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <div class="form-group">
+              <label class="form-label">Format Diskon (Tunggal, Bertumpuk, atau Nominal):</label>
+              <input type="text" id="inputDiscountFormula" class="form-input" placeholder="Contoh: 50%+20%, 30%, 5000"
+                style="font-family:var(--font-mono); font-size:1.1rem; font-weight:700;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Preset Promo Supermarket Populer:</label>
+              <div class="discount-preset-pills">
+                <button class="disc-chip" onclick="applyPresetDiscount('10%')">10%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('20%')">20%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('30%')">30%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('50%')">50%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('50%+20%')">50% + 20%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('70%+10%')">70% + 10%</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('5000')">-Rp 5.000</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('10000')">-Rp 10.000</button>
+                <button class="disc-chip" onclick="applyPresetDiscount('0')">Reset (0)</button>
+              </div>
+            </div>
+
+            <div class="discount-breakdown-box" id="discountCalcBreakdown"></div>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn"
+              style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-primary" id="btnSaveDiscount">
+              <i data-lucide="check" style="width:18px; height:18px;"></i>
+              <span>Terapkan Diskon</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 3: Checkout Summary & Archive (F-06) -->
+      <div id="checkoutModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <h3>🧾 Selesaikan &amp; Simpan Belanja</h3>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x"
+                style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <div id="checkoutSummaryContent"></div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputCheckoutTripTitle">Nama Sesi Belanja</label>
+              <input type="text" id="inputCheckoutTripTitle" class="form-input">
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="inputCheckoutStore">Lokasi Toko Belanja (F-01, F-06) *</label>
+                <input type="text" id="inputCheckoutStore" class="form-input" list="popularStoresList"
+                  placeholder="Contoh: Lotte Mart Grocery - Puri Indah">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="inputCheckoutDate">Tanggal Transaksi *</label>
+                <input type="date" id="inputCheckoutDate" class="form-input">
+              </div>
+            </div>
+
+            <p style="font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">
+              💡 <strong>F-06 Database Multi-Toko:</strong> Data harga barang pada sesi ini akan otomatis disimpan menjadi acuan
+              perbandingan (komparator) resmi untuk sesi belanja berikutnya di toko terkait.
+            </p>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn"
+              style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-primary" id="btnConfirmCheckout">
+              <i data-lucide="check-circle-2" style="width:18px; height:18px;"></i>
+              <span>Simpan &amp; Kosongkan Troli</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 4: History Trip Details Modal -->
+      <div id="historyDetailModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <h3 id="historyDetailTitle">Detail Belanja Bulanan</h3>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x"
+                style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body" id="historyDetailBody"></div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn"
+              style="border-radius:var(--radius-sm); width:100%;">Tutup</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 5: Item Options Action Sheet (Clean Mobile Action Sheet) -->
+      <div id="itemOptionsModal" class="modal-overlay">
+        <div class="bottom-sheet item-options-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <div style="min-width:0; flex:1;">
+              <h3 id="itemOptionsTitle" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Opsi Barang
+              </h3>
+              <span id="itemOptionsSub" style="font-size:0.75rem; color:var(--text-secondary);"></span>
+            </div>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x"
+                style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body" style="padding: 14px 16px 20px; gap: 10px;">
+            <button class="action-sheet-btn" id="btnActionEditItem">
+              <div class="action-btn-icon edit-icon">
+                <i data-lucide="edit-3" style="width:18px; height:18px;"></i>
+              </div>
+              <div class="action-btn-text">
+                <strong>Edit Detail Barang</strong>
+                <span>Ubah nama, harga, satuan, atau jumlah</span>
+              </div>
+            </button>
+
+            <button class="action-sheet-btn" id="btnActionDiscountItem">
+              <div class="action-btn-icon disc-icon">
+                <i data-lucide="percent" style="width:18px; height:18px;"></i>
+              </div>
+              <div class="action-btn-text">
+                <strong>Kalkulator Diskon & Promo</strong>
+                <span>Atur diskon bertingkat (50%+20%) atau potongan harga</span>
+              </div>
+            </button>
+
+            <button class="action-sheet-btn delete-action" id="btnActionDeleteItem">
+              <div class="action-btn-icon delete-icon">
+                <i data-lucide="trash-2" style="width:18px; height:18px;"></i>
+              </div>
+              <div class="action-btn-text">
+                <strong style="color:#f87171;">Hapus dari Troli</strong>
+                <span>Keluarkan barang ini dari daftar belanjaan</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
-  <!-- ==========================================================================
-       BOTTOM SHEET MODALS (TOUCH FRIENDLY)
-       ========================================================================== -->
-
-  <!-- Modal 1: Add / Edit Item Form (F-01, F-04) -->
-  <div id="itemFormModal" class="modal-overlay">
-    <div class="bottom-sheet">
-      <div class="sheet-handle-bar"></div>
-      <div class="sheet-header">
-        <h3 id="itemModalTitle">Tambah Item Belanja</h3>
-        <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
-      </div>
-      <div class="sheet-body">
-        <div class="form-group">
-          <label class="form-label" for="inputItemName">Nama Produk / Barang *</label>
-          <input type="text" id="inputItemName" class="form-input" placeholder="Contoh: Beras Ramos 5kg, Minyak 2L" autocomplete="off">
-          <div id="autocompleteSuggestions" class="autocomplete-suggestions"></div>
-        </div>
-
-        <div id="modalLiveComparatorBox" class="live-comparator-preview" style="display:none;"></div>
-
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label" for="selectItemCategory">Kategori</label>
-            <select id="selectItemCategory" class="form-select">
-              <option value="sembako">Sembako &amp; Beras</option>
-              <option value="protein">Daging &amp; Protein</option>
-              <option value="sayur_buah">Sayur &amp; Buah</option>
-              <option value="bumbu">Bumbu &amp; Minyak</option>
-              <option value="instan">Mie &amp; Makanan Instan</option>
-              <option value="mandi">Mandi &amp; Kebersihan</option>
-              <option value="minuman">Susu &amp; Minuman</option>
-              <option value="camilan">Snack &amp; Camilan</option>
-              <option value="lainnya">Lain-lain</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="selectItemUnit">Satuan</label>
-            <select id="selectItemUnit" class="form-select">
-              <option value="pcs">pcs (buah)</option>
-              <option value="kg">kg (kilogram)</option>
-              <option value="liter">liter (L)</option>
-              <option value="pack">pack / bungkus</option>
-              <option value="gram">gram (gr)</option>
-              <option value="botol">botol</option>
-              <option value="dus">dus / karton</option>
-              <option value="sachet">sachet</option>
-              <option value="ikat">ikat</option>
-              <option value="kaleng">kaleng</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label" for="inputItemQty">Jumlah (Qty) *</label>
-            <input type="number" id="inputItemQty" class="form-input" value="1" min="0.1" step="any">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="inputItemUnitPrice">Harga Satuan (Rp) *</label>
-            <div class="input-with-prefix">
-              <span class="input-prefix">Rp</span>
-              <input type="number" id="inputItemUnitPrice" class="form-input" placeholder="0" min="0" step="100">
-            </div>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputItemDiscount">Diskon / Promo (Opsional)</label>
-          <input type="text" id="inputItemDiscount" class="form-input" placeholder="Contoh: 20%, 50%+20%, 5000">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputItemNote">Catatan / Merek Khusus</label>
-          <input type="text" id="inputItemNote" class="form-input" placeholder="Contoh: Cari promo Buy 1 Get 1, atau merk Sania">
-        </div>
-      </div>
-      <div class="sheet-footer">
-        <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
-        <button class="btn-block-primary" id="btnSaveItem">
-          <i data-lucide="check" style="width:18px; height:18px;"></i>
-          <span>Simpan ke Troli</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal 2: Tiered Discount Calculator Modal (F-03) -->
-  <div id="discountCalcModal" class="modal-overlay">
-    <div class="bottom-sheet">
-      <div class="sheet-handle-bar"></div>
-      <div class="sheet-header">
-        <div>
-          <h3>Kalkulator Diskon Bertingkat</h3>
-          <span id="discountModalItemTitle" style="font-size:0.75rem; color:var(--text-secondary);"></span>
-        </div>
-        <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
-      </div>
-      <div class="sheet-body">
-        <div class="form-group">
-          <label class="form-label">Format Diskon (Tunggal, Bertumpuk, atau Nominal):</label>
-          <input type="text" id="inputDiscountFormula" class="form-input" placeholder="Contoh: 50%+20%, 30%, 5000" style="font-family:var(--font-mono); font-size:1.1rem; font-weight:700;">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Preset Promo Supermarket Populer:</label>
-          <div class="discount-preset-pills">
-            <button class="disc-chip" onclick="applyPresetDiscount('10%')">10%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('20%')">20%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('30%')">30%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('50%')">50%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('50%+20%')">50% + 20%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('70%+10%')">70% + 10%</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('5000')">-Rp 5.000</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('10000')">-Rp 10.000</button>
-            <button class="disc-chip" onclick="applyPresetDiscount('0')">Reset (0)</button>
-          </div>
-        </div>
-
-        <div class="discount-breakdown-box" id="discountCalcBreakdown"></div>
-      </div>
-      <div class="sheet-footer">
-        <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
-        <button class="btn-block-primary" id="btnSaveDiscount">
-          <i data-lucide="check" style="width:18px; height:18px;"></i>
-          <span>Terapkan Diskon</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal 3: Checkout Summary & Archive (F-06) -->
-  <div id="checkoutModal" class="modal-overlay">
-    <div class="bottom-sheet">
-      <div class="sheet-handle-bar"></div>
-      <div class="sheet-header">
-        <h3>🧾 Selesaikan &amp; Simpan Belanja</h3>
-        <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
-      </div>
-      <div class="sheet-body">
-        <div id="checkoutSummaryContent"></div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputCheckoutTripTitle">Nama Sesi Belanja</label>
-          <input type="text" id="inputCheckoutTripTitle" class="form-input">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputCheckoutStore">Tempat / Supermarket</label>
-          <input type="text" id="inputCheckoutStore" class="form-input" placeholder="Contoh: Super Indo, Alfamidi, Hypermart">
-        </div>
-
-        <p style="font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">
-          💡 <strong>Catatan:</strong> Data harga barang pada sesi ini akan otomatis disimpan menjadi acuan perbandingan (komparator) untuk belanja bulan berikutnya.
-        </p>
-      </div>
-      <div class="sheet-footer">
-        <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
-        <button class="btn-block-primary" id="btnConfirmCheckout">
-          <i data-lucide="check-circle-2" style="width:18px; height:18px;"></i>
-          <span>Simpan &amp; Kosongkan Troli</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal 4: History Trip Details Modal -->
-  <div id="historyDetailModal" class="modal-overlay">
-    <div class="bottom-sheet">
-      <div class="sheet-handle-bar"></div>
-      <div class="sheet-header">
-        <h3 id="historyDetailTitle">Detail Belanja Bulanan</h3>
-        <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
-      </div>
-      <div class="sheet-body" id="historyDetailBody"></div>
-      <div class="sheet-footer">
-        <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:100%;">Tutup</button>
-      </div>
-    </div>
-  </div>
+  <!-- Firebase SDK (v10 Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
 
   <!-- Application Logic Scripts -->
   <script src="js/data.js"></script>
   <script src="js/app.js"></script>
 </body>
+
 </html>
