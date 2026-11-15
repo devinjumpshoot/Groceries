@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-grocery-v1.0.1';
+const CACHE_NAME = 'smart-grocery-v2.0.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

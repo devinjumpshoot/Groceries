@@ -626,16 +626,21 @@ function renderCartView() {
               <i data-lucide="check" style="width:15px; height:15px; stroke-width:3.5;"></i>
             </button>
             <div class="item-meta">
-              <span class="item-title">${escapeHtml(item.name)}</span>
+              <span class="item-title" onclick="openEditItemModal('${item.id}')" style="cursor:pointer;" title="Klik untuk edit">${escapeHtml(item.name)}</span>
               <div class="item-badge-row">
                 <span class="category-tag" style="border-left: 2px solid ${catObj.color};">${catObj.name}</span>
                 ${compBadgeHtml}
               </div>
             </div>
           </div>
-          <button class="card-actions-btn" onclick="openItemOptionsModal('${item.id}')" aria-label="Opsi">
-            <i data-lucide="more-vertical" style="width:18px; height:18px;"></i>
-          </button>
+          <div class="card-actions-group">
+            <button class="card-icon-action-btn" onclick="openEditItemModal('${item.id}')" aria-label="Edit" title="Edit Barang">
+              <i data-lucide="edit-3" style="width:16px; height:16px;"></i>
+            </button>
+            <button class="card-icon-action-btn delete-btn" onclick="deleteItemDirect('${item.id}')" aria-label="Hapus" title="Hapus Barang">
+              <i data-lucide="trash-2" style="width:16px; height:16px;"></i>
+            </button>
+          </div>
         </div>
 
         <div class="grocery-card-mid">
@@ -899,6 +904,16 @@ function setItemQtyDirect(id, val) {
         `;
       }
     }
+  }
+}
+
+function deleteItemDirect(id) {
+  const item = state.cart.find(i => i.id === id);
+  if (item) {
+    state.cart = state.cart.filter(i => i.id !== id);
+    saveCartToStorage();
+    showToast(`"${item.name}" dihapus dari troli`, 'warning');
+    renderApp();
   }
 }
 
