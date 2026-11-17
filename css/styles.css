@@ -515,9 +515,9 @@ html, body {
   margin-top: 10px;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(220, 38, 38, 0.22);
+  background: rgba(220, 38, 38, 0.25);
   border: 1.5px solid #ef4444;
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -531,6 +531,30 @@ html, body {
 
 .overbudget-alert-banner i {
   color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* Banner alert when warning (F-05: Peringatan Kuning Waspada ≥90%) */
+.warning-alert-banner {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.2);
+  border: 1.5px solid #f59e0b;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: #fef3c7;
+  font-weight: 700;
+  animation: fadeIn 0.3s ease-in-out;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.warning-alert-banner i {
+  color: #fbbf24;
   flex-shrink: 0;
 }
 
@@ -675,6 +699,97 @@ html, body {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color-scheme: dark;
+}
+
+.session-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 20px;
+}
+
+.btn-add-store-quick {
+  background: transparent;
+  border: none;
+  color: var(--primary-light);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-add-store-quick:active, .btn-add-store-quick:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.store-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.store-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 5px 11px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.store-chip:hover, .store-chip:active {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: var(--primary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.saved-stores-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.saved-store-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.saved-store-item .btn-remove-custom-store {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.saved-store-item .btn-remove-custom-store:hover {
+  color: #f87171;
 }
 
 .section-toolbar {

@@ -89,25 +89,24 @@
             </div>
             <div class="session-inputs-grid">
               <div class="session-field">
-                <label for="sessionStoreInput">Lokasi Toko Belanja *</label>
+                <div class="session-field-header">
+                  <label for="sessionStoreSelect">Pilih Lokasi Toko Belanja *</label>
+                  <button type="button" class="btn-add-store-quick" id="btnOpenAddStoreModal" title="Tambah Toko Baru">
+                    <i data-lucide="plus-circle" style="width:13px; height:13px;"></i>
+                    <span>+ Tambah Toko</span>
+                  </button>
+                </div>
                 <div class="session-input-wrap">
                   <i data-lucide="map-pin" class="session-field-icon"></i>
-                  <input type="text" id="sessionStoreInput" class="session-input" list="popularStoresList"
-                    placeholder="Contoh: Lotte Mart Grocery - Puri Indah" autocomplete="off"
-                    value="Lotte Mart Grocery - Puri Indah">
-                  <datalist id="popularStoresList">
-                    <option value="Lotte Mart Grocery - Puri Indah"></option>
-                    <option value="Super Indo Swalayan"></option>
-                    <option value="Alfamidi Super"></option>
-                    <option value="Hypermart Cyberpark"></option>
-                    <option value="Grand Lucky Superstore"></option>
-                    <option value="Transmart Carrefour"></option>
-                    <option value="Indomaret Fresh"></option>
-                  </datalist>
+                  <select id="sessionStoreSelect" class="session-input session-select">
+                    <!-- Populated dynamically via renderStoreOptions() in js/app.js -->
+                  </select>
                 </div>
               </div>
               <div class="session-field">
-                <label for="sessionDateInput">Tanggal Belanja (Date Picker) *</label>
+                <div class="session-field-header">
+                  <label for="sessionDateInput">Tanggal Belanja (Date Picker) *</label>
+                </div>
                 <div class="session-input-wrap">
                   <i data-lucide="calendar" class="session-field-icon"></i>
                   <input type="date" id="sessionDateInput" class="session-input session-date-picker">
@@ -345,9 +344,14 @@
 
             <div class="form-row-2">
               <div class="form-group">
-                <label class="form-label" for="inputCheckoutStore">Lokasi Toko Belanja (F-01, F-06) *</label>
-                <input type="text" id="inputCheckoutStore" class="form-input" list="popularStoresList"
-                  placeholder="Contoh: Lotte Mart Grocery - Puri Indah">
+                <div class="session-field-header" style="margin-bottom:6px;">
+                  <label class="form-label" for="selectCheckoutStore" style="margin:0;">Lokasi Toko (F-01, F-06) *</label>
+                  <button type="button" class="btn-add-store-quick" id="btnOpenAddStoreFromCheckout">
+                    <i data-lucide="plus" style="width:12px; height:12px;"></i>
+                    <span>+ Toko</span>
+                  </button>
+                </div>
+                <select id="selectCheckoutStore" class="form-select"></select>
               </div>
               <div class="form-group">
                 <label class="form-label" for="inputCheckoutDate">Tanggal Transaksi *</label>
@@ -430,6 +434,102 @@
                 <strong style="color:#f87171;">Hapus dari Troli</strong>
                 <span>Keluarkan barang ini dari daftar belanjaan</span>
               </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 6: Add New Store Location Modal (F-01, F-06) -->
+      <div id="addStoreModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <div>
+              <h3>Tambah Lokasi Toko Baru</h3>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Tambahkan minimarket, supermarket, atau pasar lokal</span>
+            </div>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <div class="form-group">
+              <label class="form-label" for="inputNewStoreName">Nama Lokasi Toko *</label>
+              <input type="text" id="inputNewStoreName" class="form-input" placeholder="Contoh: Indomaret Fresh Kemang, Alfamart Tebet, Pasar BSD" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pilihan Cepat Toko Populer:</label>
+              <div class="store-preset-chips" id="storePresetChips">
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Indomaret Fresh')">Indomaret Fresh</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Indomaret Point')">Indomaret Point</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Alfamart')">Alfamart</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Alfamidi Super')">Alfamidi Super</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Super Indo Swalayan')">Super Indo</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Lotte Mart Grocery')">Lotte Mart</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Grand Lucky Superstore')">Grand Lucky</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Hypermart')">Hypermart</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Pasar Tradisional')">Pasar Tradisional</button>
+                <button type="button" class="store-chip" onclick="applyPresetStoreName('Warung Madura')">Warung Madura</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-size:0.78rem;">Daftar Toko Tersimpan:</label>
+              <div id="savedStoresList" class="saved-stores-pill-list"></div>
+            </div>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-primary" id="btnSaveNewStore">
+              <i data-lucide="check" style="width:18px; height:18px;"></i>
+              <span>Simpan &amp; Pilih Toko</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 7: Quick Edit Budget Limit (F-05) -->
+      <div id="quickBudgetModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <div>
+              <h3>Input Batas Limit Dompet Belanja</h3>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Pengendali Anggaran (Safety Cap)</span>
+            </div>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <div class="form-group">
+              <label class="form-label" for="inputQuickBudgetValue">Batas Maksimal Dompet (Rp) *</label>
+              <div class="input-with-prefix">
+                <span class="input-prefix">Rp</span>
+                <input type="number" id="inputQuickBudgetValue" class="form-input" min="0" step="10000" placeholder="Contoh: 100000">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pilihan Cepat Target Limit:</label>
+              <div class="store-preset-chips">
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(50000)">Rp 50.000</button>
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(100000)">Rp 100.000</button>
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(200000)">Rp 200.000</button>
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(350000)">Rp 350.000</button>
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(500000)">Rp 500.000</button>
+                <button type="button" class="store-chip" onclick="applyQuickBudgetPreset(1000000)">Rp 1.000.000</button>
+              </div>
+            </div>
+
+            <p style="font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">
+              💡 <strong>Indikator Warna Visual:</strong><br>
+              • <span style="color:#fbbf24; font-weight:700;">Kuning Waspada (≥90%)</span> jika total belanja mendekati batas limit.<br>
+              • <span style="color:#f87171; font-weight:700;">Banner Merah Tegas (>100%)</span> jika total belanja melampaui limit dompet.
+            </p>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-primary" id="btnSaveQuickBudget">
+              <i data-lucide="check" style="width:18px; height:18px;"></i>
+              <span>Simpan Batas Limit</span>
             </button>
           </div>
         </div>

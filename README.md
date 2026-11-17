@@ -1,6 +1,11 @@
 # 🛒 Smart Grocery & Budget Safety Tracker (PWA)
 
-Aplikasi Web Mobile (Progressive Web App) modern bergaya native app untuk **anak rantau** yang berbelanja bulanan di supermarket sambil mendorong troli.
+[![Live Demo](https://img.shields.io/badge/Demo%20Live-Buka%20Aplikasi-10b981?style=for-the-badge&logo=googlechrome&logoColor=white)](https://devinjumpshoot.github.io/Groceries/)
+[![PWA Ready](https://img.shields.io/badge/PWA-Ready-3b82f6?style=for-the-badge&logo=pwa&logoColor=white)](https://devinjumpshoot.github.io/Groceries/)
+
+> 🌐 **Link Live Demo Online (GitHub Pages):**  
+> 👉 [**https://devinjumpshoot.github.io/Groceries/**](https://devinjumpshoot.github.io/Groceries/)  
+> *(Buka link di atas di browser HP atau laptop untuk mencoba langsung aplikasi tanpa instalasi)*
 
 ---
 

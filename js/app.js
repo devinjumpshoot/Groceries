@@ -11,6 +11,12 @@ const state = {
     storeName: "Lotte Mart Grocery - Puri Indah",
     date: new Date().toISOString().split('T')[0]
   },
+  stores: [...(typeof POPULAR_STORES !== 'undefined' ? POPULAR_STORES : [
+    "Lotte Mart Grocery - Puri Indah",
+    "Super Indo Swalayan",
+    "Alfamidi Super",
+    "Indomaret Fresh"
+  ])],
   cart: [],
   history: [],
   priceDatabase: {},
@@ -27,7 +33,8 @@ const STORAGE_KEYS = {
   BUDGET: 'smart_grocery_budget',
   HISTORY: 'smart_grocery_history',
   PRICES: 'smart_grocery_prices',
-  SESSION: 'smart_grocery_session'
+  SESSION: 'smart_grocery_session',
+  STORES: 'smart_grocery_stores'
 };
 
 /* ==========================================================================
@@ -478,7 +485,7 @@ function renderBudgetHeaderCard() {
   } else if (percentUsed >= 90) {
     statusClass = 'status-warning';
     pillClass = 'pill-warning';
-    pillText = '⚡ WASPADA (≥90%) MENDEKATI LIMIT';
+    pillText = '⚠️ WASPADA (≥90%)';
     progressFillClass = 'fill-warning';
   } else if (percentUsed >= 70) {
     pillText = '👍 Terkendali';
@@ -492,7 +499,7 @@ function renderBudgetHeaderCard() {
         <i data-lucide="${percentUsed > 100 ? 'alert-triangle' : percentUsed >= 90 ? 'shield-alert' : 'shield-check'}" style="width:14px; height:14px;"></i>
         <span>${pillText}</span>
       </div>
-      <button class="budget-edit-trigger" id="btnQuickEditBudget">
+      <button class="budget-edit-trigger" id="btnQuickEditBudget" title="Klik untuk ubah batas limit dompet">
         <i data-lucide="sliders-horizontal" style="width:13px; height:13px;"></i>
         <span>Limit: ${formatRupiah(budget)}</span>
       </button>
@@ -520,20 +527,51 @@ function renderBudgetHeaderCard() {
 
     ${percentUsed > 100 ? `
       <div class="overbudget-alert-banner">
-        <i data-lucide="alert-octagon" style="width:18px; height:18px; flex-shrink:0;"></i>
+        <i data-lucide="alert-octagon" style="width:20px; height:20px; flex-shrink:0;"></i>
         <span><strong>PERHATIAN OVERBUDGET (>100%)!</strong> Total belanja telah melampaui limit dompet sebesar ${formatRupiah(Math.abs(remaining))}. Evaluasi kembali barang belanjaan Anda!</span>
+      </div>
+    ` : percentUsed >= 90 ? `
+      <div class="warning-alert-banner">
+        <i data-lucide="alert-triangle" style="width:18px; height:18px; flex-shrink:0;"></i>
+        <span><strong>PERINGATAN KUNING WASPADA (≥90%)!</strong> Total belanja telah mencapai ${percentUsed.toFixed(1)}% dari batas limit dompet. Sisa anggaran tinggal ${formatRupiah(remaining)}.</span>
       </div>
     ` : ''}
   `;
 
-  // Attach quick edit click
-  document.getElementById('btnQuickEditBudget')?.addEventListener('click', () => {
-    switchTab('anggaran');
-  });
+  // Attach quick edit click (opens quick budget modal directly)
+  document.getElementById('btnQuickEditBudget')?.addEventListener('click', openQuickBudgetModal);
 
   // Haptic feedback trigger on mobile if danger
   if (percentUsed > 100 && 'vibrate' in navigator) {
     try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+  }
+}
+
+/**
+ * F-05: Quick Budget Modal Handlers (Input Batas Limit Dompet)
+ */
+function openQuickBudgetModal() {
+  const input = document.getElementById('inputQuickBudgetValue');
+  if (input) input.value = state.budgetCap;
+  openModal('quickBudgetModal');
+  setTimeout(() => input?.focus(), 150);
+}
+
+function applyQuickBudgetPreset(amount) {
+  const input = document.getElementById('inputQuickBudgetValue');
+  if (input) input.value = amount;
+}
+
+function saveQuickBudgetSetting() {
+  const val = parseFloat(document.getElementById('inputQuickBudgetValue')?.value);
+  if (!isNaN(val) && val >= 0) {
+    state.budgetCap = val;
+    saveBudgetToStorage();
+    closeModal('quickBudgetModal');
+    showToast(`Batas limit dompet berhasil diatur ke ${formatRupiah(val)}!`, 'success');
+    renderApp();
+  } else {
+    showToast('Masukkan nominal batas limit yang valid!', 'warning');
   }
 }
 
@@ -1484,6 +1522,7 @@ function setupEventListeners() {
   document.getElementById('btnSaveItem')?.addEventListener('click', saveItemFromForm);
   document.getElementById('btnSaveDiscount')?.addEventListener('click', saveDiscountSetting);
   document.getElementById('btnConfirmCheckout')?.addEventListener('click', finishAndSaveTrip);
+  document.getElementById('btnSaveQuickBudget')?.addEventListener('click', saveQuickBudgetSetting);
 
   // Discount formula input dynamic update
   document.getElementById('inputDiscountFormula')?.addEventListener('input', (e) => {
