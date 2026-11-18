@@ -815,6 +815,11 @@ function renderCartView() {
 
     const hasDiscount = calc.discountAmount > 0;
 
+    // Cek apakah menambah kuantitas (+1) item ini akan menyebabkan overbudget
+    const simulatedCartPlusOne = state.cart.map(i => i.id === item.id ? { ...i, qty: Math.round((i.qty + 1) * 100) / 100 } : i);
+    const { totalSpent: simTotal, budget: limitBudget } = getCartTotals(simulatedCartPlusOne);
+    const isIncreaseBlocked = simTotal > limitBudget;
+
     return `
       <div class="grocery-card ${item.isChecked ? 'is-checked' : ''}" data-id="${item.id}">
         <div class="grocery-card-top">
@@ -855,7 +860,7 @@ function renderCartView() {
             <button class="stepper-btn" onclick="updateItemQty('${item.id}', -1)" aria-label="Kurangi kuantitas">−</button>
             <input type="number" class="stepper-qty-input" value="${item.qty}" min="0.1" step="any" oninput="setItemQtyDirect('${item.id}', this.value)" aria-label="Kuantitas">
             <span class="stepper-unit">${item.unit || 'pcs'}</span>
-            <button class="stepper-btn ${isOverbudget ? 'stepper-btn-locked' : ''}" onclick="updateItemQty('${item.id}', 1)" aria-label="Tambah kuantitas" ${isOverbudget ? 'title="Overbudget: kuantitas tidak bisa ditambah"' : ''}>+</button>
+            <button class="stepper-btn ${isIncreaseBlocked ? 'stepper-btn-locked' : ''}" onclick="updateItemQty('${item.id}', 1)" aria-label="Tambah kuantitas" ${isIncreaseBlocked ? 'title="Limit tercapai: menambah item ini akan melebihi anggaran"' : ''}>+</button>
           </div>
 
           <div class="card-item-total">
@@ -1075,10 +1080,14 @@ function updateItemQty(id, delta) {
   const item = state.cart.find(i => i.id === id);
   if (!item) return;
 
+  const newQty = Math.round((item.qty + delta) * 100) / 100;
+
   if (delta > 0) {
-    const { isOverbudget, remaining } = getCartTotals();
-    if (isOverbudget) {
-      showToast(`Tidak bisa menambah kuantitas! Keranjang belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+    // Simulasi total jika kuantitas ditambah
+    const simulatedCart = state.cart.map(i => i.id === id ? { ...i, qty: newQty } : i);
+    const { totalSpent, budget, remaining } = getCartTotals(simulatedCart);
+    if (totalSpent > budget) {
+      showToast(`Batas limit tercapai! Menambah ${item.name} akan membuat total belanja (${formatRupiah(totalSpent)}) melebihi limit dompet (${formatRupiah(budget)})!`, 'danger');
       if ('vibrate' in navigator) {
         try { navigator.vibrate([100, 50, 100]); } catch(e) {}
       }
@@ -1086,7 +1095,6 @@ function updateItemQty(id, delta) {
     }
   }
 
-  const newQty = Math.round((item.qty + delta) * 100) / 100;
   if (newQty <= 0) {
     state.cart = state.cart.filter(i => i.id !== id);
     saveCartToStorage();
@@ -1113,9 +1121,11 @@ function setItemQtyDirect(id, val) {
   const targetQty = Math.round(parsed * 100) / 100;
 
   if (targetQty > previousQty) {
-    const { isOverbudget, remaining } = getCartTotals();
-    if (isOverbudget) {
-      showToast(`Tidak bisa menambah kuantitas! Keranjang belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+    // Simulasi total jika kuantitas diketik lebih besar
+    const simulatedCart = state.cart.map(i => i.id === id ? { ...i, qty: targetQty } : i);
+    const { totalSpent, budget } = getCartTotals(simulatedCart);
+    if (totalSpent > budget) {
+      showToast(`Batas limit tercapai! Mengubah kuantitas ${item.name} ke ${targetQty} akan membuat total belanja (${formatRupiah(totalSpent)}) melebihi limit dompet (${formatRupiah(budget)})!`, 'danger');
       const card = document.querySelector(`.grocery-card[data-id="${id}"]`);
       const inputEl = card?.querySelector('.stepper-qty-input');
       if (inputEl) inputEl.value = previousQty;
@@ -1233,7 +1243,29 @@ function saveItemFromForm() {
   }
 
   if (state.editingItemId) {
-    // Update existing
+    // Update existing - check if new values will exceed budget
+    const targetItem = {
+      id: state.editingItemId,
+      name,
+      category,
+      unit,
+      qty,
+      unitPrice,
+      discountInput,
+      note,
+      isChecked: state.cart.find(i => i.id === state.editingItemId)?.isChecked || false
+    };
+    const simulatedCart = state.cart.map(i => i.id === state.editingItemId ? targetItem : i);
+    const { totalSpent, budget } = getCartTotals(simulatedCart);
+
+    if (totalSpent > budget) {
+      showToast(`Batas limit tercapai! Perubahan item ini akan membuat total belanja (${formatRupiah(totalSpent)}) melebihi limit dompet (${formatRupiah(budget)})!`, 'danger');
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+      }
+      return;
+    }
+
     const item = state.cart.find(i => i.id === state.editingItemId);
     if (item) {
       item.name = name;
@@ -1246,16 +1278,7 @@ function saveItemFromForm() {
       showToast('Item berhasil diperbarui', 'success');
     }
   } else {
-    // Add new item - verify budget safety cap
-    const { isOverbudget, remaining } = getCartTotals();
-    if (isOverbudget) {
-      showToast(`Tidak bisa menambah barang baru! Troli belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
-      if ('vibrate' in navigator) {
-        try { navigator.vibrate([100, 50, 100]); } catch(e) {}
-      }
-      return;
-    }
-
+    // Add new item - verify if adding this item will cause totalSpent > budget
     const newItem = {
       id: 'cart-' + Date.now(),
       name,
@@ -1267,6 +1290,18 @@ function saveItemFromForm() {
       note,
       isChecked: false
     };
+
+    const simulatedCart = [...state.cart, newItem];
+    const { totalSpent, budget } = getCartTotals(simulatedCart);
+
+    if (totalSpent > budget) {
+      showToast(`Batas limit tercapai! Menambahkan item ini akan membuat total belanja (${formatRupiah(totalSpent)}) melebihi limit dompet (${formatRupiah(budget)})!`, 'danger');
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+      }
+      return;
+    }
+
     state.cart.push(newItem);
     showToast(`"${name}" masuk troli`, 'success');
   }
