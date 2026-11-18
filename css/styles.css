@@ -800,6 +800,30 @@ html, body {
   gap: 8px;
 }
 
+.btn-clear-all-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 42px;
+  padding: 0 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  color: #f87171;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-clear-all-toolbar:hover, .btn-clear-all-toolbar:active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+  transform: scale(0.97);
+}
+
 .search-filter-box {
   flex: 1;
   position: relative;
@@ -2197,6 +2221,29 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.btn-block-danger {
+  flex: 1;
+  height: 48px;
+  background: #ef4444;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-block-danger:active {
+  background: #dc2626;
+  transform: scale(0.98);
 }
 
 /* Toast Notifications */

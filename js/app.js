@@ -74,6 +74,17 @@ function initCloudSync() {
 }
 
 function loadDataFromStorage() {
+  // F-01 & F-06: Load Stored Stores
+  const savedStores = localStorage.getItem(STORAGE_KEYS.STORES);
+  if (savedStores) {
+    try {
+      const parsedStores = JSON.parse(savedStores);
+      if (Array.isArray(parsedStores) && parsedStores.length > 0) {
+        state.stores = parsedStores;
+      }
+    } catch (e) {}
+  }
+
   // F-01: Load Sesi Belanja Aktif (Lokasi Toko & Tanggal)
   const savedSession = localStorage.getItem(STORAGE_KEYS.SESSION);
   if (savedSession) {
@@ -84,10 +95,20 @@ function loadDataFromStorage() {
     } catch (e) {}
   }
 
+  // Ensure current store is in state.stores list
+  if (state.currentSession.storeName && !state.stores.includes(state.currentSession.storeName)) {
+    state.stores.unshift(state.currentSession.storeName);
+  }
+
+  // Populate store dropdowns
+  renderStoreOptions();
+
   // Set input tanggal & toko di UI
   const storeInput = document.getElementById('sessionStoreInput');
+  const storeSelect = document.getElementById('sessionStoreSelect');
   const dateInput = document.getElementById('sessionDateInput');
   if (storeInput) storeInput.value = state.currentSession.storeName;
+  if (storeSelect) storeSelect.value = state.currentSession.storeName;
   if (dateInput) {
     dateInput.value = state.currentSession.date;
     updateSessionBadgeDate(state.currentSession.date);
@@ -182,6 +203,10 @@ function loadDataFromStorage() {
     ];
     saveCartToStorage();
   }
+}
+
+function saveStoresToStorage() {
+  localStorage.setItem(STORAGE_KEYS.STORES, JSON.stringify(state.stores));
 }
 
 function saveSessionToStorage() {
@@ -548,6 +573,109 @@ function renderBudgetHeaderCard() {
 }
 
 /**
+ * F-01 & F-06: Store Management & Dropdown Rendering
+ */
+function renderStoreOptions() {
+  const storeSelect = document.getElementById('sessionStoreSelect');
+  const checkoutStoreSelect = document.getElementById('selectCheckoutStore');
+  const currentStore = state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
+
+  const optionsHtml = state.stores.map(store => `
+    <option value="${escapeHtml(store)}" ${store === currentStore ? 'selected' : ''}>${escapeHtml(store)}</option>
+  `).join('');
+
+  if (storeSelect) {
+    storeSelect.innerHTML = optionsHtml;
+    storeSelect.value = currentStore;
+  }
+  if (checkoutStoreSelect) {
+    checkoutStoreSelect.innerHTML = optionsHtml;
+    checkoutStoreSelect.value = currentStore;
+  }
+}
+
+function openAddStoreModal() {
+  const input = document.getElementById('inputNewStoreName');
+  if (input) input.value = '';
+  renderSavedStoresList();
+  openModal('addStoreModal');
+  setTimeout(() => input?.focus(), 150);
+}
+
+function renderSavedStoresList() {
+  const listContainer = document.getElementById('savedStoresList');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = state.stores.map(store => `
+    <div class="saved-store-item">
+      <span style="cursor:pointer;" onclick="selectSavedStore('${escapeHtml(store)}')">${escapeHtml(store)}</span>
+      ${state.stores.length > 1 ? `
+        <button type="button" class="btn-remove-custom-store" onclick="removeStore('${escapeHtml(store)}')" title="Hapus dari daftar">
+          &times;
+        </button>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function applyPresetStoreName(storeName) {
+  const input = document.getElementById('inputNewStoreName');
+  if (input) {
+    input.value = storeName;
+    input.focus();
+  }
+}
+
+function selectSavedStore(storeName) {
+  state.currentSession.storeName = storeName;
+  saveSessionToStorage();
+  renderStoreOptions();
+  closeModal('addStoreModal');
+  showToast(`Lokasi belanja diatur ke: ${storeName}`, 'success');
+  renderCartView();
+  initLucideIcons();
+}
+
+function saveNewStoreFromModal() {
+  const input = document.getElementById('inputNewStoreName');
+  const storeName = input?.value.trim();
+  if (!storeName) {
+    showToast('Masukkan nama toko terlebih dahulu!', 'warning');
+    return;
+  }
+
+  if (!state.stores.includes(storeName)) {
+    state.stores.push(storeName);
+    saveStoresToStorage();
+  }
+
+  state.currentSession.storeName = storeName;
+  saveSessionToStorage();
+  renderStoreOptions();
+  closeModal('addStoreModal');
+  showToast(`Toko "${storeName}" berhasil ditambahkan & dipilih!`, 'success');
+  renderCartView();
+  initLucideIcons();
+}
+
+function removeStore(storeName) {
+  if (state.stores.length <= 1) {
+    showToast('Minimal harus ada satu toko tersimpan!', 'warning');
+    return;
+  }
+  state.stores = state.stores.filter(s => s !== storeName);
+  saveStoresToStorage();
+  if (state.currentSession.storeName === storeName) {
+    state.currentSession.storeName = state.stores[0];
+    saveSessionToStorage();
+  }
+  renderStoreOptions();
+  renderSavedStoresList();
+  renderCartView();
+  initLucideIcons();
+}
+
+/**
  * F-05: Quick Budget Modal Handlers (Input Batas Limit Dompet)
  */
 function openQuickBudgetModal() {
@@ -884,6 +1012,17 @@ function updateNavBadge() {
     badge.textContent = state.cart.length;
     badge.style.display = state.cart.length > 0 ? 'flex' : 'none';
   }
+
+  // Update clear all buttons visibility
+  const headerClearBtn = document.getElementById('btnClearAllCart');
+  const toolbarClearBtn = document.getElementById('btnToolbarClearCart');
+  const hasCartItems = state.cart.length > 0;
+  if (headerClearBtn) {
+    headerClearBtn.style.display = hasCartItems && state.activeTab === 'belanja' ? 'flex' : 'none';
+  }
+  if (toolbarClearBtn) {
+    toolbarClearBtn.style.display = hasCartItems ? 'inline-flex' : 'none';
+  }
 }
 
 /* ==========================================================================
@@ -953,6 +1092,25 @@ function deleteItemDirect(id) {
     showToast(`"${item.name}" dihapus dari troli`, 'warning');
     renderApp();
   }
+}
+
+function confirmClearCart() {
+  if (state.cart.length === 0) {
+    showToast('Troli belanja sudah kosong!', 'info');
+    return;
+  }
+  const countEl = document.getElementById('clearCartCountText');
+  if (countEl) countEl.textContent = `${state.cart.length} item`;
+  openModal('clearCartConfirmModal');
+}
+
+function clearAllCartItems() {
+  const count = state.cart.length;
+  state.cart = [];
+  saveCartToStorage();
+  closeModal('clearCartConfirmModal');
+  showToast(`${count} item belanja berhasil dikosongkan dari troli!`, 'success');
+  renderApp();
 }
 
 function openAddItemModal() {
@@ -1217,10 +1375,12 @@ function openCheckoutSummaryModal() {
 
   const titleInput = document.getElementById('inputCheckoutTripTitle');
   const storeInput = document.getElementById('inputCheckoutStore');
+  const storeSelect = document.getElementById('selectCheckoutStore');
   const dateInput = document.getElementById('inputCheckoutDate');
 
   if (titleInput) titleInput.value = defaultTripTitle;
   if (storeInput) storeInput.value = state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
+  if (storeSelect) storeSelect.value = state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
   if (dateInput) dateInput.value = state.currentSession.date || new Date().toISOString().split('T')[0];
   
   document.getElementById('checkoutSummaryContent').innerHTML = `
@@ -1241,7 +1401,7 @@ function openCheckoutSummaryModal() {
 
 function finishAndSaveTrip() {
   const title = document.getElementById('inputCheckoutTripTitle')?.value.trim() || 'Belanja Bulanan Kos';
-  const store = document.getElementById('inputCheckoutStore')?.value.trim() || state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
+  const store = document.getElementById('selectCheckoutStore')?.value.trim() || document.getElementById('inputCheckoutStore')?.value.trim() || state.currentSession.storeName || 'Lotte Mart Grocery - Puri Indah';
   const tripDate = document.getElementById('inputCheckoutDate')?.value || state.currentSession.date || new Date().toISOString().split('T')[0];
 
   let totalOriginal = 0;
@@ -1473,7 +1633,18 @@ function setupAutocomplete() {
    NAVIGATION & EVENT LISTENERS
    ========================================================================== */
 function setupEventListeners() {
-  // F-01: Session Store Input (Lokasi Toko)
+  // F-01: Session Store Select & Input (Lokasi Toko)
+  const sessionStoreSelect = document.getElementById('sessionStoreSelect');
+  if (sessionStoreSelect) {
+    sessionStoreSelect.addEventListener('change', (e) => {
+      const val = e.target.value.trim();
+      state.currentSession.storeName = val || 'Lotte Mart Grocery - Puri Indah';
+      saveSessionToStorage();
+      renderCartView();
+      initLucideIcons();
+    });
+  }
+
   const sessionStoreEl = document.getElementById('sessionStoreInput');
   if (sessionStoreEl) {
     const handleStoreChange = (e) => {
@@ -1486,6 +1657,14 @@ function setupEventListeners() {
     sessionStoreEl.addEventListener('input', handleStoreChange);
     sessionStoreEl.addEventListener('change', handleStoreChange);
   }
+
+  // Quick Add Store Modal Triggers
+  document.getElementById('btnOpenAddStoreModal')?.addEventListener('click', openAddStoreModal);
+  document.getElementById('btnOpenAddStoreFromCheckout')?.addEventListener('click', openAddStoreModal);
+  document.getElementById('btnSaveNewStore')?.addEventListener('click', saveNewStoreFromModal);
+
+  // Clear Cart Confirmation
+  document.getElementById('btnConfirmClearCart')?.addEventListener('click', clearAllCartItems);
 
   // F-01: Session Date Picker (Selector Tanggal)
   const sessionDateEl = document.getElementById('sessionDateInput');

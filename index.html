@@ -55,6 +55,10 @@
             </div>
           </div>
           <div class="header-actions">
+            <button class="icon-btn-header" id="btnClearAllCart" onclick="confirmClearCart()" title="Kosongkan Semua Item Troli"
+              aria-label="Kosongkan Troli" style="display:none; color:rgba(248, 113, 113, 0.85);">
+              <i data-lucide="trash" style="width: 17px; height: 17px;"></i>
+            </button>
             <button class="icon-btn-header" onclick="openAddItemModal()" title="Tambah Barang Cepat"
               aria-label="Tambah Barang">
               <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
@@ -122,6 +126,10 @@
               <input type="text" id="globalSearchInput" class="search-input" placeholder="Cari barang atau catatan..."
                 autocomplete="off">
             </div>
+            <button class="btn-clear-all-toolbar" id="btnToolbarClearCart" onclick="confirmClearCart()" title="Kosongkan Semua Item Belanja" style="display:none;">
+              <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+              <span>Clear All</span>
+            </button>
           </div>
 
           <!-- Category Filter Pills -->
@@ -530,6 +538,32 @@
             <button class="btn-block-primary" id="btnSaveQuickBudget">
               <i data-lucide="check" style="width:18px; height:18px;"></i>
               <span>Simpan Batas Limit</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal 8: Confirm Clear Cart Modal -->
+      <div id="clearCartConfirmModal" class="modal-overlay">
+        <div class="bottom-sheet">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-header">
+            <div>
+              <h3 style="color:#f87171;">Kosongkan Semua Item Belanja?</h3>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Tindakan ini akan menghapus semua barang dari troli saat ini</span>
+            </div>
+            <button class="sheet-close-btn" aria-label="Tutup"><i data-lucide="x" style="width:18px; height:18px;"></i></button>
+          </div>
+          <div class="sheet-body">
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; margin:0;">
+              Apakah kamu yakin ingin menghapus seluruh <strong id="clearCartCountText" style="color:var(--text-primary);">0 item</strong> dari troli belanja? Item yang sudah dihapus tidak dapat dikembalikan kecuali diisi ulang.
+            </p>
+          </div>
+          <div class="sheet-footer">
+            <button class="btn-block-secondary sheet-close-btn" style="border-radius:var(--radius-sm); width:auto;">Batal</button>
+            <button class="btn-block-danger" id="btnConfirmClearCart">
+              <i data-lucide="trash-2" style="width:18px; height:18px;"></i>
+              <span>Ya, Kosongkan Troli</span>
             </button>
           </div>
         </div>
