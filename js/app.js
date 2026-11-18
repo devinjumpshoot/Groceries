@@ -451,6 +451,26 @@ function comparePriceWithPrevious(itemName, currentUnitPrice, targetStore) {
   }
 }
 
+function getCartTotals(cartList = state.cart) {
+  let totalOriginal = 0;
+  let totalSpent = 0;
+  let totalSaved = 0;
+
+  cartList.forEach(item => {
+    const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
+    totalOriginal += calc.originalSubtotal;
+    totalSpent += calc.finalTotal;
+    totalSaved += calc.discountAmount;
+  });
+
+  const budget = state.budgetCap;
+  const remaining = budget - totalSpent;
+  const isOverbudget = totalSpent > budget;
+  const percentUsed = budget > 0 ? (totalSpent / budget) * 100 : 0;
+
+  return { totalOriginal, totalSpent, totalSaved, budget, remaining, isOverbudget, percentUsed };
+}
+
 /* ==========================================================================
    RENDERERS & UI UPDATES
    ========================================================================== */
@@ -481,20 +501,7 @@ function renderBudgetHeaderCard() {
   if (!safetyCard) return;
 
   // Calculate totals
-  let totalOriginal = 0;
-  let totalSpent = 0;
-  let totalSaved = 0;
-
-  state.cart.forEach(item => {
-    const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
-    totalOriginal += calc.originalSubtotal;
-    totalSpent += calc.finalTotal;
-    totalSaved += calc.discountAmount;
-  });
-
-  const budget = state.budgetCap;
-  const remaining = budget - totalSpent;
-  const percentUsed = budget > 0 ? (totalSpent / budget) * 100 : 0;
+  const { totalOriginal, totalSpent, totalSaved, budget, remaining, isOverbudget, percentUsed } = getCartTotals();
 
   // F-05 Visual status & Colors
   let statusClass = 'status-safe';
@@ -553,7 +560,7 @@ function renderBudgetHeaderCard() {
     ${percentUsed > 100 ? `
       <div class="overbudget-alert-banner">
         <i data-lucide="alert-octagon" style="width:20px; height:20px; flex-shrink:0;"></i>
-        <span><strong>PERHATIAN OVERBUDGET (>100%)!</strong> Total belanja telah melampaui limit dompet sebesar ${formatRupiah(Math.abs(remaining))}. Evaluasi kembali barang belanjaan Anda!</span>
+        <span><strong>PERHATIAN OVERBUDGET (>100%)!</strong> Total belanja telah melampaui limit dompet sebesar ${formatRupiah(Math.abs(remaining))}. Penambahan barang baru atau kuantitas dikunci agar tidak melebihi anggaran!</span>
       </div>
     ` : percentUsed >= 90 ? `
       <div class="warning-alert-banner">
@@ -562,6 +569,28 @@ function renderBudgetHeaderCard() {
       </div>
     ` : ''}
   `;
+
+  // Update Add Item FAB and Header button state when overbudget
+  const fabAdd = document.getElementById('fabAddItem');
+  const headerAddBtn = document.querySelector('.icon-btn-header[onclick="openAddItemModal()"]');
+  if (fabAdd) {
+    if (isOverbudget) {
+      fabAdd.classList.add('fab-disabled-overbudget');
+      fabAdd.setAttribute('title', 'Troli overbudget! Kurangi barang atau naikkan limit sebelum menambah barang.');
+    } else {
+      fabAdd.classList.remove('fab-disabled-overbudget');
+      fabAdd.removeAttribute('title');
+    }
+  }
+  if (headerAddBtn) {
+    if (isOverbudget) {
+      headerAddBtn.classList.add('btn-disabled-overbudget');
+      headerAddBtn.setAttribute('title', 'Troli overbudget! Tidak bisa menambah barang.');
+    } else {
+      headerAddBtn.classList.remove('btn-disabled-overbudget');
+      headerAddBtn.removeAttribute('title');
+    }
+  }
 
   // Attach quick edit click (opens quick budget modal directly)
   document.getElementById('btnQuickEditBudget')?.addEventListener('click', openQuickBudgetModal);
@@ -765,6 +794,8 @@ function renderCartView() {
     return;
   }
 
+  const { isOverbudget } = getCartTotals();
+
   listContainer.innerHTML = filteredItems.map(item => {
     const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
     const comp = comparePriceWithPrevious(item.name, item.unitPrice, state.currentSession.storeName);
@@ -824,7 +855,7 @@ function renderCartView() {
             <button class="stepper-btn" onclick="updateItemQty('${item.id}', -1)" aria-label="Kurangi kuantitas">−</button>
             <input type="number" class="stepper-qty-input" value="${item.qty}" min="0.1" step="any" oninput="setItemQtyDirect('${item.id}', this.value)" aria-label="Kuantitas">
             <span class="stepper-unit">${item.unit || 'pcs'}</span>
-            <button class="stepper-btn" onclick="updateItemQty('${item.id}', 1)" aria-label="Tambah kuantitas">+</button>
+            <button class="stepper-btn ${isOverbudget ? 'stepper-btn-locked' : ''}" onclick="updateItemQty('${item.id}', 1)" aria-label="Tambah kuantitas" ${isOverbudget ? 'title="Overbudget: kuantitas tidak bisa ditambah"' : ''}>+</button>
           </div>
 
           <div class="card-item-total">
@@ -1042,18 +1073,29 @@ function toggleCheckItem(id) {
 
 function updateItemQty(id, delta) {
   const item = state.cart.find(i => i.id === id);
-  if (item) {
-    const newQty = Math.round((item.qty + delta) * 100) / 100;
-    if (newQty <= 0) {
-      state.cart = state.cart.filter(i => i.id !== id);
-      saveCartToStorage();
-      showToast(`Item "${item.name}" dihapus dari troli`, 'warning');
-      renderApp();
-    } else {
-      item.qty = newQty;
-      saveCartToStorage();
-      renderApp();
+  if (!item) return;
+
+  if (delta > 0) {
+    const { isOverbudget, remaining } = getCartTotals();
+    if (isOverbudget) {
+      showToast(`Tidak bisa menambah kuantitas! Keranjang belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+      }
+      return;
     }
+  }
+
+  const newQty = Math.round((item.qty + delta) * 100) / 100;
+  if (newQty <= 0) {
+    state.cart = state.cart.filter(i => i.id !== id);
+    saveCartToStorage();
+    showToast(`Item "${item.name}" dihapus dari troli`, 'warning');
+    renderApp();
+  } else {
+    item.qty = newQty;
+    saveCartToStorage();
+    renderApp();
   }
 }
 
@@ -1065,21 +1107,35 @@ function setItemQtyDirect(id, val) {
   const parsed = parseFloat(val);
   if (isNaN(parsed) || parsed <= 0) return;
   const item = state.cart.find(i => i.id === id);
-  if (item) {
-    item.qty = Math.round(parsed * 100) / 100;
-    saveCartToStorage();
-    renderBudgetHeaderCard();
-    const card = document.querySelector(`.grocery-card[data-id="${id}"]`);
-    if (card) {
-      const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
-      const totalEl = card.querySelector('.card-item-total');
-      if (totalEl) {
-        const hasDiscount = calc.discountAmount > 0;
-        totalEl.innerHTML = `
-          ${hasDiscount ? `<div class="orig-price-strike">${formatRupiah(calc.originalSubtotal)}</div>` : ''}
-          <div class="final-price">${formatRupiah(calc.finalTotal)}</div>
-        `;
-      }
+  if (!item) return;
+
+  const previousQty = item.qty;
+  const targetQty = Math.round(parsed * 100) / 100;
+
+  if (targetQty > previousQty) {
+    const { isOverbudget, remaining } = getCartTotals();
+    if (isOverbudget) {
+      showToast(`Tidak bisa menambah kuantitas! Keranjang belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+      const card = document.querySelector(`.grocery-card[data-id="${id}"]`);
+      const inputEl = card?.querySelector('.stepper-qty-input');
+      if (inputEl) inputEl.value = previousQty;
+      return;
+    }
+  }
+
+  item.qty = targetQty;
+  saveCartToStorage();
+  renderBudgetHeaderCard();
+  const card = document.querySelector(`.grocery-card[data-id="${id}"]`);
+  if (card) {
+    const calc = calculateTieredDiscount(item.unitPrice, item.qty, item.discountInput);
+    const totalEl = card.querySelector('.card-item-total');
+    if (totalEl) {
+      const hasDiscount = calc.discountAmount > 0;
+      totalEl.innerHTML = `
+        ${hasDiscount ? `<div class="orig-price-strike">${formatRupiah(calc.originalSubtotal)}</div>` : ''}
+        <div class="final-price">${formatRupiah(calc.finalTotal)}</div>
+      `;
     }
   }
 }
@@ -1114,6 +1170,15 @@ function clearAllCartItems() {
 }
 
 function openAddItemModal() {
+  const { isOverbudget, remaining } = getCartTotals();
+  if (isOverbudget) {
+    showToast(`Tidak bisa menambah barang baru! Total belanja overbudget sebesar ${formatRupiah(Math.abs(remaining))}. Evaluasi atau kurangi barang di troli terlebih dahulu.`, 'danger');
+    if ('vibrate' in navigator) {
+      try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+    }
+    return;
+  }
+
   state.editingItemId = null;
   document.getElementById('itemModalTitle').textContent = 'Tambah Item Belanja';
   document.getElementById('inputItemName').value = '';
@@ -1181,7 +1246,16 @@ function saveItemFromForm() {
       showToast('Item berhasil diperbarui', 'success');
     }
   } else {
-    // Add new item
+    // Add new item - verify budget safety cap
+    const { isOverbudget, remaining } = getCartTotals();
+    if (isOverbudget) {
+      showToast(`Tidak bisa menambah barang baru! Troli belanja sudah overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100]); } catch(e) {}
+      }
+      return;
+    }
+
     const newItem = {
       id: 'cart-' + Date.now(),
       name,
@@ -1512,6 +1586,12 @@ function openHistoryDetailModal(tripId) {
 }
 
 function copyTripToCart(tripId) {
+  const { isOverbudget, remaining } = getCartTotals();
+  if (isOverbudget) {
+    showToast(`Tidak bisa menambahkan item riwayat! Troli sedang overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+    return;
+  }
+
   const trip = state.history.find(t => t.id === tripId);
   if (!trip || !trip.items) return;
 
@@ -1535,6 +1615,12 @@ function copyTripToCart(tripId) {
 }
 
 function loadTemplate(tpl) {
+  const { isOverbudget, remaining } = getCartTotals();
+  if (isOverbudget) {
+    showToast(`Tidak bisa memuat template! Troli sedang overbudget (${formatRupiah(Math.abs(remaining))})!`, 'danger');
+    return;
+  }
+
   const newItems = tpl.items.map(item => ({
     id: 'cart-' + Math.random().toString(36).substr(2, 9),
     name: item.name,

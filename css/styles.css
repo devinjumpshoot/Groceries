@@ -534,6 +534,30 @@ html, body {
   flex-shrink: 0;
 }
 
+/* Overbudget Lock Styles */
+.fab-disabled-overbudget {
+  opacity: 0.55 !important;
+  filter: grayscale(0.6);
+  cursor: not-allowed !important;
+  background: #475569 !important;
+  box-shadow: none !important;
+}
+
+.btn-disabled-overbudget {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+.stepper-btn.stepper-btn-locked {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+}
+
+.stepper-btn.stepper-btn-locked:active {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
 /* Banner alert when warning (F-05: Peringatan Kuning Waspada ≥90%) */
 .warning-alert-banner {
   margin-top: 10px;
